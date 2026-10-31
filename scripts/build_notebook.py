@@ -4,7 +4,6 @@ import base64
 import json
 import ast
 import hashlib
-import zlib
 from pathlib import Path
 import nbformat as nbf
 
@@ -13,7 +12,7 @@ MODULE_ORDER = ['config', 'cache', 'runtime', 'augment', 'data', 'models',
                 'features', 'evaluation', 'pipeline', 'exploration']
 
 
-def portable_source():
+def source_blocks():
     blocks = []
     for name in MODULE_ORDER:
         source = (ROOT / 'src/eurosat' / f'{name}.py').read_text()
@@ -23,8 +22,12 @@ def portable_source():
             if isinstance(node, ast.ImportFrom) and node.level:
                 remove.update(range(node.lineno, node.end_lineno + 1))
         body = ''.join(line for i, line in enumerate(source.splitlines(True), 1) if i not in remove)
-        blocks.append(f'# Source: src/eurosat/{name}.py\n' + body)
-    return '\n\n'.join(blocks)
+        blocks.append((name, body))
+    return blocks
+
+
+def portable_source():
+    return '\n\n'.join(body for _, body in source_blocks())
 
 
 def build():
@@ -92,7 +95,7 @@ print('Recreatable runtime-local image files:', SCRATCH)
 '''),
         md('''## 3. Load project helpers
 
-Run the next two cells once. The collapsed cell stores a compressed copy of the helpers so this single notebook works in Colab without a repository upload. The short loader makes those helpers available; experiments start later. Read or edit the implementation in `src/eurosat/`, then rebuild the notebook.
+The following cells contain the actual implementation, grouped by responsibility. Run them in order to define the helpers; experiments start in section 7. No repository imports or encoded loader are required.
 '''),
         code('''from dataclasses import asdict, replace
 import json
@@ -119,9 +122,9 @@ for field in ['trials', 'views']:
         setattr(config, field, int(value))
 config.validate()
 device = check_device(TARGET)
-print('Interpreter:', sys.executable)
 print('Software:', environment())
-print(json.dumps(asdict(config), indent=2))
+print(f'Models: {config.models} | policies: {len(config.policies)} | shots: {config.shots}')
+print(f'Trials: {config.trials} | added views: {config.views} | seed: {config.seed}')
 print('SMOKE CHECK — not research results' if MODE == 'smoke' else 'FULL EXPERIMENT')
 '''),
         md('''## 5. Dataset exploration and data-quality audit
@@ -252,7 +255,7 @@ Only support images receive random augmentation. Development and test preprocess
 Accuracy and Macro-F1 are fractions; paired improvements are percentage points relative to each trial's unaugmented baseline. Preferred policies are selected from development performance, while all prespecified comparisons remain available in the exported results. Smoke scores below validate execution only.
 '''),
         code('''table = pd.DataFrame(results['summary'])
-display(table.sort_values(['model', 'shots', 'policy']).reset_index(drop=True))
+display(table.sort_values(['model', 'shots', 'policy']).reset_index(drop=True).round(3))
 print('Results, classifier records and development-selected policies:', results['output'])
 '''),
     ]
@@ -285,23 +288,36 @@ print('Results, classifier records and development-selected policies:', results[
                          'colab': {'gpuType': 'T4', 'provenance': []}}
     index = next(i for i, c in enumerate(notebook.cells)
                  if 'project_imports' in c.metadata.get('tags', []))
-    payload = base64.b64encode(zlib.compress(portable_source().encode(), level=9)).decode()
-    packed = code('# Generated project payload — edit src/eurosat/, then rebuild.\n'
-                  + '_EUROSAT_SOURCE = ' + repr(payload), metadata={
-                      'tags': ['generated_project_payload'],
-                      'jupyter': {'source_hidden': True}, 'collapsed': True,
-                      'colab': {'source_hidden': True}})
-    loader = code('''# Load the bundled helpers; no experiment runs in this cell.
-import base64
-import zlib
-exec(compile(zlib.decompress(base64.b64decode(_EUROSAT_SOURCE)),
-             'eurosat-bundled-helpers', 'exec'), globals())
-print('EuroSAT helpers ready. Continue to configuration and dataset exploration.')
-''', metadata={'tags': ['project_loader']})
-    notebook.cells[index:index + 1] = [packed, loader]
+    labels = {
+        'config': 'Presets and checkpoint identities',
+        'cache': 'Atomic checkpoints and persistent storage',
+        'runtime': 'Hardware checks and software versions',
+        'augment': 'Support-image augmentation',
+        'data': 'Dataset acquisition, cleaning, splits and shot sampling',
+        'models': 'Frozen backbone adapters',
+        'features': 'Batched feature extraction and caching',
+        'evaluation': 'Classifier selection and paired metrics',
+        'pipeline': 'Run and resume experiments',
+        'exploration': 'Dataset audit and visualization'
+    }
+    implementation = []
+    for number, (name, source) in enumerate(source_blocks(), 1):
+        implementation.extend([
+            md(f'### 3.{number}. {labels[name]}'),
+            code(source, metadata={'tags': ['project_implementation', name]})])
+    notebook.cells[index:index + 1] = implementation
     for i, cell in enumerate(notebook.cells):
         cell.id = 'cell-' + hashlib.sha256(f'{i}:{cell.source}'.encode()).hexdigest()[:12]
     destination = ROOT / 'EuroSAT_Low_Data_Benchmark.ipynb'
+    # Preserve genuine saved execution outputs only when all code is unchanged.
+    if destination.exists():
+        previous = nbf.read(destination, as_version=4)
+        old_code = [c for c in previous.cells if c.cell_type == 'code']
+        new_code = [c for c in notebook.cells if c.cell_type == 'code']
+        if [c.source for c in old_code] == [c.source for c in new_code]:
+            for old, new in zip(old_code, new_code):
+                new.outputs = old.outputs
+                new.execution_count = old.execution_count
     nbf.validate(notebook)
     nbf.write(notebook, destination)
     return destination
@@ -318,7 +334,7 @@ if __name__ == '__main__':
     if args.check:
         after = nbf.read(path, as_version=4)
         # Generated cell IDs are incidental; source, type and metadata must agree.
-        canonical = lambda nb: [(c.cell_type, c.source, dict(c.metadata)) for c in nb.cells]
+        canonical = lambda nb: [(c.cell_type, c.source, {k: v for k, v in c.metadata.items() if k != 'execution'}) for c in nb.cells]
         if before is None or canonical(before) != canonical(after):
             raise SystemExit('Tracked notebook is stale; run python scripts/build_notebook.py and commit it.')
     print(outputs)

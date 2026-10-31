@@ -13,7 +13,7 @@ Checked on 2026-10-30 on the local Mac using Apple MPS, Python 3.11.5, PyTorch 2
 
 ## Local evidence
 
-The earlier portable/reference copies were consolidated into `EuroSAT_Low_Data_Benchmark.ipynb`. The executor now saves outputs to that same notebook; the builder restores its clean cells and measured dataset previews. Superseded execution and backup notebook copies have been removed. Per-experiment `outputs/<experiment-id>/results.json` records the real trial results and configuration. `work/tests.log` and `work/environment.freeze.txt` retain unit-test and dependency information. Local evidence, large artifacts and environments are ignored by Git.
+The earlier portable/reference copies were consolidated into `EuroSAT_Low_Data_Benchmark.ipynb`. The executor now saves outputs to that same notebook; the builder preserves matching executed outputs, or restores measured dataset previews when code changes. Superseded execution and backup notebook copies have been removed. Per-experiment `outputs/<experiment-id>/results.json` records the real trial results and configuration. `work/tests.log` and `work/environment.freeze.txt` retain unit-test and dependency information. Local evidence, large artifacts and environments are ignored by Git.
 
 ## Remaining cloud checks
 
@@ -32,3 +32,5 @@ The complete 2,400-result full-data research grid has not been executed. Smoke-r
 Evidence: `work/unit-checks.log`, `work/build.log`, the unified notebook, and `docs/figures/`. Some stages reuse existing caches; these elapsed times are workflow checks, not accelerator throughput comparisons.
 
 The unified `EuroSAT_Low_Data_Benchmark.ipynb` passed every cell in a fresh local kernel in 8.8 seconds after consolidation, including six live dataset figures and cached ResNet smoke results. Nine unit tests passed.
+
+Readable-code revision: the notebook contains ten actual implementation cells, without encoded code or repository imports. A fresh local execution passed in 8.6 seconds; hardware/configuration, dataset tables, six figures, cached-run status and the nine-row ResNet smoke table are saved in the notebook. The original prototype only had saved connection/Drive messages; those historical connection states are not presented as current runtime outputs.

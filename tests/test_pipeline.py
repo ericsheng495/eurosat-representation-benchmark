@@ -160,17 +160,13 @@ class PipelineTests(unittest.TestCase):
         root = Path(__file__).resolve().parents[1]
         notebook = nbformat.read(root / 'EuroSAT_Low_Data_Benchmark.ipynb', as_version=4)
         nbformat.validate(notebook)
-        import base64
-        import zlib
-        payload = next(c for c in notebook.cells if
-                       'generated_project_payload' in c.metadata.get('tags', []))
+        cells = [c for c in notebook.cells if
+                 'project_implementation' in c.metadata.get('tags', [])]
+        self.assertEqual('\n\n'.join(c.source for c in cells), portable_source())
         namespace = {}
-        exec(payload.source, namespace)
-        decoded = zlib.decompress(base64.b64decode(namespace['_EUROSAT_SOURCE'])).decode()
-        self.assertEqual(decoded, portable_source())
-        self.assertTrue(payload.metadata['jupyter']['source_hidden'])
-        loader = next(c for c in notebook.cells if 'project_loader' in c.metadata.get('tags', []))
-        exec(loader.source, namespace)
+        for cell in cells:
+            self.assertFalse(cell.metadata.get('jupyter', {}).get('source_hidden', False))
+            exec(cell.source, namespace)
         self.assertTrue(callable(namespace['explore']))
         self.assertEqual(namespace['Config']().models, ['resnet18'])
         self.assertEqual(len(list(root.glob('*.ipynb'))), 1)

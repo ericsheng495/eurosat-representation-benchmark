@@ -15,7 +15,7 @@ Native RGB support images from EuroSAT (Helber et al., 2019; Copernicus Sentinel
 
 In VS Code, choose **Select Another Kernel → Colab → New Colab Server → GPU → Python 3 (ipykernel)**. The runtime must have an NVIDIA GPU; selecting Python on a TPU server does not change its hardware. The notebook checks the device before downloading data. Colab allocation and account authorization happen in your own account.
 
-Open **[EuroSAT_Low_Data_Benchmark.ipynb](EuroSAT_Low_Data_Benchmark.ipynb)** for all notebook work. It bundles the helpers in a compressed, collapsed payload with a short loader and needs no GitHub credentials when uploaded to Colab. Saved dataset previews are visible before execution, followed by dataset tables, six figures, four labeled implementation parts with TODO checkboxes, and one selected execution cell. The same file works locally in VS Code with `TARGET = 'local'`.
+Open **[EuroSAT_Low_Data_Benchmark.ipynb](EuroSAT_Low_Data_Benchmark.ipynb)** for all notebook work. It contains the actual helper code in ten labeled, readable cells and needs no GitHub credentials when uploaded to Colab. Saved dataset previews are visible before execution, followed by dataset tables, six figures, four labeled implementation parts with TODO checkboxes, and one selected execution cell. The same file works locally in VS Code with `TARGET = 'local'`.
 
 
 ## Local development
@@ -58,7 +58,7 @@ docs/                        Proposal, methodology, figures and team instruction
 TODO.md                      Checkoff plan with suggested four-person workstreams
 ```
 
-The executor saves cell outputs into this same notebook; it does not create another notebook copy. Rebuilding restores the clean notebook with saved dataset previews.
+The executor saves cell outputs into this same notebook; it does not create another notebook copy. Rebuilding preserves saved outputs when the code is unchanged; changed code starts with measured dataset previews.
 
 Edit reusable behavior in `src/eurosat`, and notebook narrative in `scripts/build_notebook.py`; rebuild and commit the tracked notebook. `dist/`, environments, datasets, caches, execution outputs and results are ignored. CI checks the notebook, runs unit tests and builds the package.
 
