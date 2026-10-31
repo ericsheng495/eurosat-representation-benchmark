@@ -169,6 +169,28 @@ class PipelineTests(unittest.TestCase):
             if cell.cell_type == 'code':
                 compile(cell.source, 'notebook', 'exec')
 
+    def test_fresh_colab_preflight_detects_gpu_and_rejects_missing_gpu(self):
+        from subprocess import CompletedProcess
+        root = Path(__file__).resolve().parents[1]
+        notebook = nbformat.read(root / 'EuroSAT_Low_Data_Benchmark.ipynb', as_version=4)
+        source = next(c.source for c in notebook.cells if c.cell_type == 'code')
+        # Execute with empty globals: earlier imports cannot hide missing imports.
+        with patch.dict('os.environ', {'EUROSAT_TARGET': 'colab_gpu', 'EUROSAT_MODE': 'smoke'}), \
+                patch('pathlib.Path.is_dir', return_value=True), \
+                patch('shutil.which', return_value='/usr/bin/nvidia-smi'), \
+                patch('subprocess.run', return_value=CompletedProcess([], 0, 'Tesla T4\n', '')) as command:
+            namespace = {}
+            exec(compile(source, 'runtime-cell', 'exec'), namespace)
+            self.assertEqual(namespace['TARGET'], 'colab_gpu')
+            command.assert_called_once_with(
+                ['/usr/bin/nvidia-smi', '--query-gpu=name', '--format=csv,noheader'],
+                capture_output=True, text=True)
+        with patch.dict('os.environ', {'EUROSAT_TARGET': 'colab_gpu', 'EUROSAT_MODE': 'smoke'}), \
+                patch('pathlib.Path.is_dir', return_value=True), \
+                patch('shutil.which', return_value=None):
+            with self.assertRaisesRegex(RuntimeError, 'no NVIDIA GPU'):
+                exec(compile(source, 'runtime-cell', 'exec'), {})
+
     def test_exploration_reports_measured_counts_and_rejects_leakage(self):
         from eurosat.exploration import dataset_profile, dataset_figures, FIGURE_NAMES
         records = self.images()

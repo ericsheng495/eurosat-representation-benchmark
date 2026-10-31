@@ -41,6 +41,7 @@ This notebook presents the dataset audit, experimental protocol and execution wo
         md('## 1. Runtime and execution scope'),
         code('''import os
 import sys
+import shutil
 import subprocess
 from pathlib import Path
 
