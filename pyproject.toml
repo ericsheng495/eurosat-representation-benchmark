@@ -3,7 +3,7 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "eurosat-low-data"
+name = "eurosat-representation-benchmark"
 version = "0.1.0"
 description = "Frozen CNN and Transformer representations for few-shot EuroSAT classification"
 readme = "README.md"

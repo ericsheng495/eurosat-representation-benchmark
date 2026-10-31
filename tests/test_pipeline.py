@@ -1,5 +1,4 @@
 from dataclasses import replace, asdict
-import io
 import json
 from pathlib import Path
 import tempfile
@@ -158,7 +157,7 @@ class PipelineTests(unittest.TestCase):
     def test_portable_notebook_is_valid_and_helpers_match(self):
         from scripts.build_notebook import portable_source
         root = Path(__file__).resolve().parents[1]
-        notebook = nbformat.read(root / 'EuroSAT_Low_Data_Benchmark.ipynb', as_version=4)
+        notebook = nbformat.read(root / 'EuroSAT_Representation_Benchmark.ipynb', as_version=4)
         nbformat.validate(notebook)
         cells = [c for c in notebook.cells if
                  'project_implementation' in c.metadata.get('tags', [])]
@@ -177,10 +176,23 @@ class PipelineTests(unittest.TestCase):
             if cell.cell_type == 'code':
                 compile(cell.source, 'notebook', 'exec')
 
+    def test_notebook_drift_check_does_not_overwrite_edits(self):
+        from scripts import build_notebook
+        path = self.root / 'notebook.json'
+        notebook = nbformat.read(build_notebook.NOTEBOOK, as_version=4)
+        notebook.cells[2].source += '\n# A teammate edit that must survive a failed check.\n'
+        nbformat.write(notebook, path)
+        before = path.read_bytes()
+        with patch.object(build_notebook, 'NOTEBOOK', path), \
+                patch('sys.argv', ['build_notebook.py', '--check']):
+            with self.assertRaisesRegex(SystemExit, 'stale'):
+                build_notebook.main()
+        self.assertEqual(path.read_bytes(), before)
+
     def test_fresh_colab_preflight_detects_gpu_and_rejects_missing_gpu(self):
         from subprocess import CompletedProcess
         root = Path(__file__).resolve().parents[1]
-        notebook = nbformat.read(root / 'EuroSAT_Low_Data_Benchmark.ipynb', as_version=4)
+        notebook = nbformat.read(root / 'EuroSAT_Representation_Benchmark.ipynb', as_version=4)
         source = next(c.source for c in notebook.cells if c.cell_type == 'code')
         # Execute with empty globals: earlier imports cannot hide missing imports.
         with patch.dict('os.environ', {'EUROSAT_TARGET': 'colab_gpu', 'EUROSAT_MODE': 'smoke'}), \

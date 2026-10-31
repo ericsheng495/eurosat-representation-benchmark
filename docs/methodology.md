@@ -17,7 +17,7 @@ Smoke mode uses 40 real images per class, one trial, one augmented view, ResNet-
 In Colab, persistent storage is a new folder:
 
 ```text
-MyDrive/ColabNotebooks/cs7643/EuroSATLowData/
+MyDrive/ColabNotebooks/cs7643/EuroSATRepresentationBenchmark/
   data/EuroSAT.zip            Downloaded once and checksum-verified
   cache/weights/             Downloaded backbone implementations and weights
   cache/dataset-*.json        Duplicate-check manifests
@@ -27,7 +27,7 @@ MyDrive/ColabNotebooks/cs7643/EuroSATLowData/
   outputs/<experiment-id>/   results.json, summary.csv, development-selected-policies.json
 ```
 
-Extracted images live under `/content/eurosat-low-data` for fast reads. They are recreated from the persistent archive when Colab discards its runtime disk. No duplicated class-folder splits are written to Drive.
+Extracted images live under `/content/eurosat-representation-benchmark` for fast reads. They are recreated from the persistent archive when Colab discards its runtime disk. No duplicated class-folder splits are written to Drive.
 
 Feature caches identify dataset contents, exact checkpoint IDs, preprocessing, augmentation policy, deterministic image/view seeds and software versions. Completed feature chunks survive interruption. Classifier parameters (`coef`, `intercept`, `classes`) are saved as numeric NPZ checkpoints; a JSON completion record is published afterward. A disconnected classifier trial repeats only that trial. Fully completed model results skip model loading and feature extraction on rerun.
 
@@ -45,3 +45,5 @@ Fixed initial augmentation strengths are: horizontal or vertical flip; rotation 
 Full mode implements the primary original-plus-four-view comparison. To perform the proposal's selected nine-view comparisons, prespecify the model/policy subset and rerun with `config.views = 9` and `config.shots = [1]`; the numeric configuration distinguishes these artifacts. Cutout and backbone fine-tuning are optional extensions and are not in the default grid. Hardware and wall-clock conditions affect timing; cold model-load/download time is included in `original_feature_seconds`. This measures an end-to-end extraction stage, not isolated accelerator throughput. Spatially related samples may remain across partitions because geographic grouping metadata has not been established.
 
 See [validation](docs/validation.md) for executed checks and remaining cloud verification.
+
+Existing Drive storage named `EuroSATLowData` is reused automatically to preserve earlier caches. New storage uses `EuroSATRepresentationBenchmark`; set `EUROSAT_STORAGE` to override it.

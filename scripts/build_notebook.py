@@ -1,13 +1,14 @@
 """Build the single self-contained EuroSAT research notebook."""
 import argparse
-import base64
-import json
 import ast
+import base64
 import hashlib
+import json
 from pathlib import Path
 import nbformat as nbf
 
 ROOT = Path(__file__).resolve().parents[1]
+NOTEBOOK = ROOT / 'EuroSAT_Representation_Benchmark.ipynb'
 MODULE_ORDER = ['config', 'cache', 'runtime', 'augment', 'data', 'models',
                 'features', 'evaluation', 'pipeline', 'exploration']
 
@@ -30,17 +31,17 @@ def portable_source():
     return '\n\n'.join(body for _, body in source_blocks())
 
 
-def build():
+def build(*, write=True):
     md, code = nbf.v4.new_markdown_cell, nbf.v4.new_code_cell
     notebook = nbf.v4.new_notebook()
     notebook.cells = [
-        md('''# Low-data land-use classification with frozen visual representations
+        md('''# EuroSAT Representation Benchmark
 
 **Research question.** How do pretrained CNN and Transformer representations compare on EuroSAT when only 1, 5 or 10 labeled original images per class are available, and how does support-image augmentation change that comparison?
 
-This notebook presents the dataset audit, experimental protocol and execution workflow. Development labels select settings; held-out query labels are reserved for evaluation. Smoke runs validate execution and are not final research results.
+This notebook presents the dataset audit, experimental protocol and execution workflow. Development labels select settings; held-out query labels are reserved for evaluation. Smoke runs validate execution and are not final research results. Saved outputs reflect a prior execution; rerun to refresh them for your current runtime.
 
-**Colab:** open `EuroSAT_Low_Data_Benchmark.ipynb`, choose a GPU runtime (T4 or L4), then run all cells. In VS Code, select **Colab → New Colab Server → GPU → Python 3 (ipykernel)**. This single notebook embeds the project modules and works in Colab or VS Code. For a local kernel, set `TARGET = 'local'`.
+**Colab:** open `EuroSAT_Representation_Benchmark.ipynb`, choose a GPU runtime (T4 or L4), then run all cells. In VS Code, select **Colab → New Colab Server → GPU → Python 3 (ipykernel)**. This single notebook embeds the project modules and works in Colab or VS Code. For a local kernel, set `TARGET = 'local'`.
 '''),
         md('## 1. Runtime and execution scope'),
         code('''import os
@@ -82,8 +83,11 @@ if TARGET == 'colab_gpu':
     from google.colab import drive
     drive.mount('/content/drive')
     # A shared Drive folder/shortcut can be used here after granting access to all teammates.
-    STORAGE = Path('/content/drive/MyDrive/ColabNotebooks/cs7643/EuroSATLowData')
-    SCRATCH = Path('/content/eurosat-low-data')
+    drive_project = Path('/content/drive/MyDrive/ColabNotebooks/cs7643')
+    previous_storage = drive_project / 'EuroSATLowData'
+    default_storage = previous_storage if previous_storage.exists() else drive_project / 'EuroSATRepresentationBenchmark'
+    STORAGE = Path(os.environ.get('EUROSAT_STORAGE', str(default_storage)))
+    SCRATCH = Path('/content/eurosat-representation-benchmark')
 else:
     current = Path.cwd()
     project = next((p for p in [current, *current.parents] if (p / 'pyproject.toml').exists()), current)
@@ -97,12 +101,7 @@ print('Recreatable runtime-local image files:', SCRATCH)
 
 The following cells contain the actual implementation, grouped by responsibility. Run them in order to define the helpers; experiments start in section 7. No repository imports or encoded loader are required.
 '''),
-        code('''from dataclasses import asdict, replace
-import json
-from eurosat import Config, run
-from eurosat.exploration import explore
-from eurosat.runtime import check_device, environment
-''', metadata={'tags': ['project_imports']}),
+        code('', metadata={'tags': ['implementation_placeholder']}),
         md('''## 4. Experimental protocol
 
 All ten land-use classes are retained. Decoded-RGB duplicates are checked before a deterministic, stratified 60% support-pool / 20% development / 20% held-out-test split. The 1-shot support set is nested in the corresponding 5- and 10-shot sets, with the same images and augmentation views across models.
@@ -287,7 +286,7 @@ print('Results, classifier records and development-selected policies:', results[
                          'language_info': {'name': 'python'}, 'accelerator': 'GPU',
                          'colab': {'gpuType': 'T4', 'provenance': []}}
     index = next(i for i, c in enumerate(notebook.cells)
-                 if 'project_imports' in c.metadata.get('tags', []))
+                 if 'implementation_placeholder' in c.metadata.get('tags', []))
     labels = {
         'config': 'Presets and checkpoint identities',
         'cache': 'Atomic checkpoints and persistent storage',
@@ -308,7 +307,7 @@ print('Results, classifier records and development-selected policies:', results[
     notebook.cells[index:index + 1] = implementation
     for i, cell in enumerate(notebook.cells):
         cell.id = 'cell-' + hashlib.sha256(f'{i}:{cell.source}'.encode()).hexdigest()[:12]
-    destination = ROOT / 'EuroSAT_Low_Data_Benchmark.ipynb'
+    destination = NOTEBOOK
     # Preserve genuine saved execution outputs only when all code is unchanged.
     if destination.exists():
         previous = nbf.read(destination, as_version=4)
@@ -319,22 +318,28 @@ print('Results, classifier records and development-selected policies:', results[
                 new.outputs = old.outputs
                 new.execution_count = old.execution_count
     nbf.validate(notebook)
-    nbf.write(notebook, destination)
-    return destination
+    if write:
+        nbf.write(notebook, destination)
+    return notebook
 
+
+def canonical_cells(notebook):
+    """Compare authored cells, ignoring outputs and execution timestamps."""
+    return [(cell.cell_type, cell.source,
+             {k: v for k, v in cell.metadata.items() if k != 'execution'})
+            for cell in notebook.cells]
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--check', action='store_true', help='Check for drift without changing files')
+    args = parser.parse_args()
+    generated = build(write=not args.check)
+    if args.check:
+        if not NOTEBOOK.exists() or canonical_cells(nbf.read(NOTEBOOK, as_version=4)) != canonical_cells(generated):
+            raise SystemExit('Tracked notebook is stale; run python scripts/build_notebook.py and commit it.')
+    print(NOTEBOOK)
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--check', action='store_true', help='Fail if the tracked notebook has drifted')
-    args = parser.parse_args()
-    path = ROOT / 'EuroSAT_Low_Data_Benchmark.ipynb'
-    before = nbf.read(path, as_version=4) if args.check and path.exists() else None
-    outputs = build()
-    if args.check:
-        after = nbf.read(path, as_version=4)
-        # Generated cell IDs are incidental; source, type and metadata must agree.
-        canonical = lambda nb: [(c.cell_type, c.source, {k: v for k, v in c.metadata.items() if k != 'execution'}) for c in nb.cells]
-        if before is None or canonical(before) != canonical(after):
-            raise SystemExit('Tracked notebook is stale; run python scripts/build_notebook.py and commit it.')
-    print(outputs)
+    main()

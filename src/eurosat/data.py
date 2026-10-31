@@ -17,7 +17,7 @@ def prepare_data(storage, scratch, config):
     if not archive.exists():
         def download(temporary):
             print('Downloading EuroSAT RGB (~90 MB), once per storage folder...', flush=True)
-            request = urllib.request.Request(DATA_URL, headers={'User-Agent': 'eurosat-low-data/0.1'})
+            request = urllib.request.Request(DATA_URL, headers={'User-Agent': 'eurosat-representation-benchmark/0.1'})
             with urllib.request.urlopen(request, timeout=120) as response, temporary.open('wb') as stream:
                 shutil.copyfileobj(response, stream)
             if digest_file(temporary, 'md5') != DATA_MD5:

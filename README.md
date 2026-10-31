@@ -1,4 +1,4 @@
-# EuroSAT Low-Data Classification
+# EuroSAT Representation Benchmark
 
 CS7643 research project comparing frozen CNN and Transformer representations with 1, 5 and 10 labeled images per land-use class. The [proposal](docs/project-proposal.pdf) defines the study; [TODO.md](TODO.md) tracks implementation and experiments for four teammates.
 
@@ -8,15 +8,14 @@ Native RGB support images from EuroSAT (Helber et al., 2019; Copernicus Sentinel
 
 ## Run in Colab
 
-1. Rebuild the notebook after source changes: `python scripts/build_notebook.py` after installing the project below.
-2. Upload `EuroSAT_Low_Data_Benchmark.ipynb` to Colab and choose a **GPU** runtime.
+1. Open the notebook linked below; it already includes the code and saved outputs.
+2. Upload `EuroSAT_Representation_Benchmark.ipynb` to Colab and choose a **GPU** runtime.
 3. Run all cells and authorize Drive. Start with `MODE = 'smoke'` to check execution.
 4. For research runs set `MODE = 'full'`. Each teammate sets `ASSIGNMENT` to their backbone from Parts A–D.
 
 In VS Code, choose **Select Another Kernel → Colab → New Colab Server → GPU → Python 3 (ipykernel)**. The runtime must have an NVIDIA GPU; selecting Python on a TPU server does not change its hardware. The notebook checks the device before downloading data. Colab allocation and account authorization happen in your own account.
 
-Open **[EuroSAT_Low_Data_Benchmark.ipynb](EuroSAT_Low_Data_Benchmark.ipynb)** for all notebook work. It contains the actual helper code in ten labeled, readable cells and needs no GitHub credentials when uploaded to Colab. Saved dataset previews are visible before execution, followed by dataset tables, six figures, four labeled implementation parts with TODO checkboxes, and one selected execution cell. The same file works locally in VS Code with `TARGET = 'local'`.
-
+Open **[EuroSAT_Representation_Benchmark.ipynb](EuroSAT_Representation_Benchmark.ipynb)** for all notebook work. It contains the actual helper code in ten labeled, readable cells and needs no GitHub credentials when uploaded to Colab. Saved dataset previews are visible before execution, followed by dataset tables, six figures, four labeled implementation parts with TODO checkboxes, and one selected execution cell. The same file works locally in VS Code with `TARGET = 'local'`.
 
 ## Local development
 
@@ -42,7 +41,7 @@ python -m eurosat merge outputs/model-a/results.json outputs/model-b/results.jso
 ## Repository structure
 
 ```text
-EuroSAT_Low_Data_Benchmark.ipynb  One notebook: dataset exploration, Parts A–D, experiments
+EuroSAT_Representation_Benchmark.ipynb  One notebook: dataset exploration, Parts A–D, experiments
 src/eurosat/
   config.py, runtime.py       Presets, checkpoint identities and hardware checks
   data.py, exploration.py     Verified data, splits, audit and figures
@@ -60,12 +59,14 @@ TODO.md                      Checkoff plan with suggested four-person workstream
 
 The executor saves cell outputs into this same notebook; it does not create another notebook copy. Rebuilding preserves saved outputs when the code is unchanged; changed code starts with measured dataset previews.
 
-Edit reusable behavior in `src/eurosat`, and notebook narrative in `scripts/build_notebook.py`; rebuild and commit the tracked notebook. `dist/`, environments, datasets, caches, execution outputs and results are ignored. CI checks the notebook, runs unit tests and builds the package.
+Edit reusable behavior in `src/eurosat`, and notebook narrative in `scripts/build_notebook.py`; rebuild and commit the tracked notebook. `dist/`, environments, datasets, caches and raw result exports are ignored; reviewed notebook outputs are retained. CI checks the notebook, runs unit tests and builds the package.
 
 ## Study and recovery
 
 The primary study uses all ten classes, deduplicated 60/20/20 support/development/test partitions, frozen ResNet-18, ConvNeXt-Tiny, ViT-B/16 and DINOv2, and the same development-tuned logistic regression. Full mode includes 20 paired trials, ten augmentation/control conditions and three shot budgets: 2,400 classifier results. Smoke scores are execution checks, not research findings.
 
-Colab saves the archive, weights, feature chunks, classifier checkpoints and completed trial records to `MyDrive/ColabNotebooks/cs7643/EuroSATLowData`. Raw images are extracted to disposable runtime-local storage. Rerunning resumes matching cached work; a restart may need to extract images again. Local caches and Drive caches are separate. Changing relevant settings creates different cache identities; increment `PIPELINE_VERSION` for semantic code changes.
+Colab saves the archive, weights, feature chunks, classifier checkpoints and completed trial records to `MyDrive/ColabNotebooks/cs7643/EuroSATRepresentationBenchmark`. Raw images are extracted to disposable runtime-local storage. Rerunning resumes matching cached work; a restart may need to extract images again. Local caches and Drive caches are separate. Changing relevant settings creates different cache identities; increment `PIPELINE_VERSION` for semantic code changes.
 
 Read [collaboration](docs/collaboration.md) for ownership, branches, shared Drive and merging; [methodology](docs/methodology.md) for protocol and limitations; [original-notebook migration](docs/migration.md) for what was retained or replaced; and [validation](docs/validation.md) for execution evidence.
+
+Existing Drive storage named `EuroSATLowData` is reused automatically to preserve earlier caches. New storage uses `EuroSATRepresentationBenchmark`; set `EUROSAT_STORAGE` to override it.
