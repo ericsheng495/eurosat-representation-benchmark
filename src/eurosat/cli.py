@@ -1,0 +1,40 @@
+"""Command-line entry points for experiments and full-dataset exploration."""
+import argparse
+from pathlib import Path
+
+from .config import Config
+from .pipeline import run
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(prog='eurosat', description='Few-shot EuroSAT research workflow')
+    commands = parser.add_subparsers(dest='command', required=True)
+    experiment = commands.add_parser('run', help='Run or resume an experiment locally')
+    experiment.add_argument('--mode', choices=['smoke', 'full'], default='smoke')
+    experiment.add_argument('--models', nargs='+')
+    experiment.add_argument('--policies', nargs='+')
+    experiment.add_argument('--trials', type=int)
+    experiment.add_argument('--views', type=int)
+    experiment.add_argument('--storage', type=Path, default=Path.cwd())
+    exploration = commands.add_parser('explore', help='Audit the full dataset and export paper figures')
+    exploration.add_argument('--storage', type=Path, default=Path.cwd())
+    exploration.add_argument('--output', type=Path)
+    merge = commands.add_parser('merge', help='Combine compatible completed teammate result exports')
+    merge.add_argument('inputs', nargs='+', type=Path)
+    merge.add_argument('--output', required=True, type=Path)
+    args = parser.parse_args(argv)
+    if args.command == 'merge':
+        from .reporting import merge_results
+        return merge_results(args.inputs, args.output)
+    scratch = args.storage / 'data/extracted'
+    if args.command == 'explore':
+        import matplotlib
+        matplotlib.use('Agg')
+        from .exploration import explore
+        return explore(args.storage, scratch, output=args.output)
+    config = Config.full() if args.mode == 'full' else Config()
+    for name in ['models', 'policies', 'trials', 'views']:
+        value = getattr(args, name)
+        if value is not None:
+            setattr(config, name, value)
+    return run(config, args.storage, scratch, target='local')

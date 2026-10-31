@@ -16,11 +16,13 @@ parser.add_argument('--models', default='resnet18')
 parser.add_argument('--policies', default='none,repeat,flip')
 parser.add_argument('--trials', type=int, default=1)
 parser.add_argument('--views', type=int, default=1)
+parser.add_argument('--notebook', type=Path, help='Defaults to the generated self-contained Colab notebook')
+parser.add_argument('--output', type=Path)
 args = parser.parse_args()
 root = Path(__file__).resolve().parents[1]
-output = root / 'work/Start_Here.executed.ipynb'
+output = args.output or root / 'work/notebook.executed.ipynb'
 output.parent.mkdir(exist_ok=True)
-notebook = nbformat.read(root / 'Start_Here.ipynb', as_version=4)
+notebook = nbformat.read(args.notebook or root / 'dist/eurosat_colab.ipynb', as_version=4)
 started = time.monotonic()
 def on_cell_start(cell, cell_index, **kwargs):
     if cell.cell_type == 'code':
@@ -44,7 +46,7 @@ with tempfile.TemporaryDirectory(prefix='eurosat-low-data-kernel-') as temporary
         client.execute(cwd=str(root), env=dict(os.environ, EUROSAT_TARGET='local',
                        EUROSAT_MODE='smoke', EUROSAT_STORAGE=str(root), EUROSAT_MODELS=args.models,
                        EUROSAT_POLICIES=args.policies, EUROSAT_TRIALS=str(args.trials),
-                       EUROSAT_VIEWS=str(args.views)))
+                       EUROSAT_VIEWS=str(args.views), MPLBACKEND='Agg'))
     finally:
         nbformat.write(notebook, output)
         if manager.has_kernel:

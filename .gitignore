@@ -12,3 +12,7 @@ work/
 *.pt
 *.pth
 *.npz
+dist/
+build/
+.coverage
+.pytest_cache/

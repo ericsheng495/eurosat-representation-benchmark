@@ -1,4 +1,4 @@
-from dataclasses import replace
+from dataclasses import replace, asdict
 import io
 import json
 from pathlib import Path
@@ -14,6 +14,7 @@ import torch
 from torch import nn
 
 from eurosat import pipeline as p
+from eurosat import cache, config as settings, data, features, evaluation
 
 
 class MeanFeatures(nn.Module):
@@ -28,30 +29,30 @@ class PipelineTests(unittest.TestCase):
         self.root = Path(self.temporary.name)
         self.old_hub = torch.hub.get_dir()
         self.addCleanup(torch.hub.set_dir, self.old_hub)
-        self.storage = p.prepare_storage(self.root)
+        self.storage = cache.prepare_storage(self.root)
 
     def images(self, per_class=20):
         records = []
-        for label, name in enumerate(p.CLASSES):
+        for label, name in enumerate(settings.CLASSES):
             (self.root / 'images' / name).mkdir(parents=True, exist_ok=True)
             for i in range(per_class):
                 relative = f'{name}/{i}.jpg'
                 Image.new('RGB', (24, 24), (label * 23, i * 7 % 256, (label + i) * 3)).save(
                     self.root / 'images' / relative)
-                records.append({'path': relative, 'label': label, 'pixels_sha256': p.key([label, i])})
+                records.append({'path': relative, 'label': label, 'pixels_sha256': cache.key([label, i])})
         return records
 
     def test_support_sets_are_nested_paired_and_disjoint_from_queries(self):
         records = self.images()
-        split = p.stratified_split(records, 42)
+        split = data.stratified_split(records, 42)
         partitions = [set(indices) for indices in split.values()]
         self.assertEqual(len(set.union(*partitions)), len(records))
         self.assertFalse(partitions[0] & partitions[1] or partitions[0] & partitions[2]
                          or partitions[1] & partitions[2])
-        config = p.Config(trials=3)
-        trials = p.make_trials(records, split, config)
-        self.assertEqual(trials, p.make_trials(records, split, config))
-        one_shot_only = p.make_trials(records, split, replace(config, shots=[1], views=9))
+        config = settings.Config(trials=3)
+        trials = data.make_trials(records, split, config)
+        self.assertEqual(trials, data.make_trials(records, split, config))
+        one_shot_only = data.make_trials(records, split, replace(config, shots=[1], views=9))
         for full, reduced in zip(trials, one_shot_only):
             self.assertEqual(full['1'], reduced['1'])
         for trial in trials:
@@ -61,10 +62,10 @@ class PipelineTests(unittest.TestCase):
 
     def test_augmentation_is_reproducible_per_image_and_view(self):
         records = self.images(1)
-        for policy in p.POLICIES:
+        for policy in settings.POLICIES:
             if policy == 'repeat':
                 continue
-            dataset = p.Images(self.root / 'images', records, [(0, 0), (0, 1)], policy, 42)
+            dataset = features.Images(self.root / 'images', records, [(0, 0), (0, 1)], policy, 42)
             first, label = dataset[0]
             self.assertEqual(label, 0)
             self.assertEqual(tuple(first.shape), (3, 224, 224))
@@ -77,10 +78,10 @@ class PipelineTests(unittest.TestCase):
         with zipfile.ZipFile(archive, 'w') as bundle:
             for record in records:
                 bundle.write(self.root / 'images' / record['path'], '2750/' + record['path'])
-            for name in p.CLASSES:
+            for name in settings.CLASSES:
                 bundle.write(self.root / 'images' / name / '0.jpg', f'2750/{name}/duplicate.jpg')
-        with patch.object(p, 'DATA_MD5', p.digest_file(archive, 'md5')):
-            _, kept, split, _ = p.prepare_data(self.storage, self.root / 'scratch', p.Config(per_class_limit=None))
+        with patch.object(data, 'DATA_MD5', cache.digest_file(archive, 'md5')):
+            _, kept, split, _ = data.prepare_data(self.storage, self.root / 'scratch', settings.Config(per_class_limit=None))
         self.assertEqual(len(kept), 200)
         pixels = [r['pixels_sha256'] for r in kept]
         self.assertEqual(len(set(pixels)), 200)
@@ -88,7 +89,7 @@ class PipelineTests(unittest.TestCase):
 
     def test_interrupted_feature_extraction_keeps_completed_chunks(self):
         records = self.images(1)
-        config = p.Config(chunk_size=2, batch_size=2)
+        config = settings.Config(chunk_size=2, batch_size=2)
         class Interrupting(MeanFeatures):
             calls = 0
             fail = True
@@ -101,24 +102,24 @@ class PipelineTests(unittest.TestCase):
         args = (self.storage, self.root / 'images', records, 'dataset', 'resnet18', model,
                 torch.device('cpu'), [(i, 0) for i in range(5)], 'none', config)
         with self.assertRaisesRegex(RuntimeError, 'Disconnected'):
-            p.extract(*args)
+            features.extract(*args)
         self.assertEqual(len(list((self.root / 'cache/features').glob('*.npz'))), 1)
         model.calls, model.fail = 0, False
-        features, labels = p.extract(*args)
+        embeddings, labels = features.extract(*args)
         self.assertEqual(model.calls, 2)
-        self.assertEqual(features.shape, (5, 3))
+        self.assertEqual(embeddings.shape, (5, 3))
         self.assertEqual(len(labels), 5)
-        np.testing.assert_allclose(np.linalg.norm(features, axis=1), 1., atol=1e-6)
+        np.testing.assert_allclose(np.linalg.norm(embeddings, axis=1), 1., atol=1e-6)
         model.calls = 0
-        p.extract(*args)
+        features.extract(*args)
         self.assertEqual(model.calls, 0)
 
     def test_trial_resume_and_completed_run_skip_model_loading(self):
         records = self.images()
-        split = p.stratified_split(records, 42)
-        config = p.Config(shots=[1, 5], policies=['none', 'repeat'], classifier_cs=[1.])
+        split = data.stratified_split(records, 42)
+        config = settings.Config(shots=[1, 5], policies=['none', 'repeat'], classifier_cs=[1.])
         fixture = (self.root / 'images', records, split, 'synthetic')
-        actual_fit = p.fit_classifier
+        actual_fit = evaluation.fit_classifier
         calls = []
         def interrupted(*args):
             calls.append(1)
@@ -151,18 +152,70 @@ class PipelineTests(unittest.TestCase):
             temporary.write_bytes(b'incomplete')
             raise RuntimeError('Interrupted')
         with self.assertRaises(RuntimeError):
-            p.atomic(path, fail)
+            cache.atomic(path, fail)
         self.assertEqual(path.read_bytes(), b'previous')
 
     def test_portable_notebook_is_valid_and_helpers_match(self):
+        from scripts.build_notebook import portable_source
         root = Path(__file__).resolve().parents[1]
-        notebook = nbformat.read(root / 'Start_Here.ipynb', as_version=4)
+        notebook = nbformat.read(root / 'dist/eurosat_colab.ipynb', as_version=4)
         nbformat.validate(notebook)
-        helpers = (root / 'src/eurosat/pipeline.py').read_text()
-        self.assertTrue(any(c.source == helpers for c in notebook.cells))
-        for cell in notebook.cells:
-            if cell.cell_type == 'code':
-                compile(cell.source, 'notebook', 'exec')
+        self.assertTrue(any(c.source == portable_source() for c in notebook.cells))
+        reference = nbformat.read(root / 'notebooks/experiments.ipynb', as_version=4)
+        self.assertTrue(any('project_imports' in c.metadata.get('tags', []) for c in reference.cells))
+        for nb in [notebook, reference]:
+            for cell in nb.cells:
+                if cell.cell_type == 'code':
+                    compile(cell.source, 'notebook', 'exec')
+
+    def test_exploration_reports_measured_counts_and_rejects_leakage(self):
+        from eurosat.exploration import dataset_profile, dataset_figures, FIGURE_NAMES
+        records = self.images()
+        split = data.stratified_split(records, 42)
+        profile = dataset_profile(self.root / 'images', records, split)
+        self.assertEqual(profile['images'], 200)
+        self.assertEqual(profile['native_sizes'], {'24x24': 200})
+        self.assertEqual(profile['partition_counts'], {'support': 120, 'dev': 40, 'test': 40})
+        figures = dataset_figures(self.root / 'images', records, split, profile, self.root / 'figures')
+        self.assertEqual(set(figures), set(FIGURE_NAMES))
+        for exports in figures.values():
+            self.assertTrue(Path(exports['png']).read_bytes().startswith(b'\x89PNG'))
+            self.assertTrue(Path(exports['pdf']).read_bytes().startswith(b'%PDF'))
+        sources = json.loads((self.root / 'figures/figure_sources.json').read_text())
+        support_paths = {records[i]['path'] for i in split['support']}
+        self.assertTrue(set(sources['class_examples']) <= support_paths)
+        self.assertIn(sources['example'], support_paths)
+        broken = {k: v.copy() for k, v in split.items()}
+        broken['test'].append(split['support'][0])
+        with self.assertRaisesRegex(ValueError, 'overlap'):
+            dataset_profile(self.root / 'images', records, broken)
+
+    def test_merge_requires_compatible_complete_unique_trials(self):
+        from eurosat.reporting import merge_results
+        reports = []
+        for model in ['resnet18', 'convnext_tiny']:
+            config = settings.Config(models=[model], shots=[1], policies=['none'])
+            manifest = {'config': asdict(config), 'dataset': 'same', 'trials': [{'1': [0]}],
+                        'versions': {'torch': 'same'}, 'checkpoints': {model: settings.MODEL_IDS[model]}}
+            rows = [{'model': model, 'policy': 'none', 'shots': 1, 'trial': 0,
+                     'test': {'accuracy': .5, 'macro_f1': .4}, 'dev_accuracy': .6}]
+            path = self.root / (model + '.json')
+            path.write_text(json.dumps({'manifest': manifest, 'trials': rows}))
+            reports.append(path)
+        merged = merge_results(reports, self.root / 'combined')
+        self.assertEqual(merged['models'], ['resnet18', 'convnext_tiny'])
+        with self.assertRaisesRegex(ValueError, 'multiple exports'):
+            merge_results([reports[0], reports[0]], self.root / 'bad')
+        changed = json.loads(reports[1].read_text())
+        changed['manifest']['config']['seed'] = 9
+        reports[1].write_text(json.dumps(changed))
+        with self.assertRaisesRegex(ValueError, 'different datasets'):
+            merge_results(reports, self.root / 'bad')
+        changed['manifest']['config']['seed'] = 42
+        changed['trials'] = []
+        reports[1].write_text(json.dumps(changed))
+        with self.assertRaisesRegex(ValueError, 'incomplete'):
+            merge_results(reports, self.root / 'bad')
 
 
 if __name__ == '__main__':

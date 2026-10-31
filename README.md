@@ -1,105 +1,68 @@
 # EuroSAT Low-Data Classification
 
-A fresh CS7643 project based on [proposal draft 2](docs/project-proposal.pdf). This project uses frozen pretrained representations and all ten EuroSAT classes. It does not reuse the old fine-tuned six-base/four-novel-class notebook.
+CS7643 research project comparing frozen CNN and Transformer representations with 1, 5 and 10 labeled images per land-use class. The [proposal](docs/project-proposal.pdf) defines the study; [TODO.md](TODO.md) tracks implementation and experiments for four teammates.
 
-## Start here
+![EuroSAT class examples](docs/figures/class_examples.png)
 
-1. Open **[Start_Here.ipynb](Start_Here.ipynb)** in Google Colab (upload this one file).
-2. Choose **Runtime → Change runtime type → T4 GPU** or another available GPU. Connect.
-3. Run all cells and authorize Google Drive. Leave `MODE = 'smoke'` for the first check.
-4. After the check succeeds, change `MODE` to `'full'`, inspect the configuration, then Run all again.
+Native RGB support images from EuroSAT (Helber et al., 2019; Copernicus Sentinel-2). [Dataset audit and figure provenance](docs/dataset.md).
 
-In VS Code, open `EuroSAT.code-workspace`, open `Start_Here.ipynb`, then choose **Select Another Kernel → Colab → New Colab Server → GPU → Python 3 (ipykernel)**. Python is the kernel language; GPU is the server hardware. Choosing Python on a TPU server does not turn it into a GPU server. Google sign-in and runtime allocation happen in your account; this repository cannot allocate a server on your behalf.
+## Run in Colab
 
-The first cell checks for a remote NVIDIA GPU before importing PyTorch or downloading data. This prevents the earlier TPU/local-kernel confusion. The later hardware check performs a real tensor operation on the selected device. Connection details: [official Colab VS Code guide](https://github.com/googlecolab/colab-vscode/wiki/User-Guide).
+1. Build the portable notebook: `python scripts/build_notebook.py` after installing the project below.
+2. Upload `dist/eurosat_colab.ipynb` to Colab and choose a **GPU** runtime.
+3. Run all cells and authorize Drive. Start with `MODE = 'smoke'` to check execution.
+4. For research runs set `MODE = 'full'`. Each teammate sets `ASSIGNMENT` to their backbone from Parts A–D.
 
-## Project files
+In VS Code, choose **Select Another Kernel → Colab → New Colab Server → GPU → Python 3 (ipykernel)**. The runtime must have an NVIDIA GPU; selecting Python on a TPU server does not change its hardware. The notebook checks the device before downloading data. Colab allocation and account authorization happen in your own account.
 
-```text
-Start_Here.ipynb             Self-contained cloud notebook; the only file you must upload
-src/eurosat/pipeline.py      Canonical, readable implementation
-scripts/build_notebook.py    Rebuild the notebook after editing pipeline helpers
-scripts/run.py               Local smoke/full experiment runner
-scripts/execute_notebook.py  Execute the actual notebook in a fresh local kernel
-tests/test_pipeline.py       Leakage, cache recovery and resumability tests
-docs/project-proposal.pdf    Your latest downloaded proposal
-EuroSAT.code-workspace      VS Code workspace
-```
-
-The original project remains separately in `Desktop/eurosat-fewshot-benchmark`; it is not used by this folder.
-
-## What is implemented
-
-- Four frozen backbones: ImageNet-1K ResNet-18, ConvNeXt-Tiny and ViT-B/16, plus official DINOv2 ViT-S/14. Backbone identifiers, the pinned DINOv2 source revision and software versions are saved with each experiment.
-- All ten classes, exact decoded-RGB pixel duplicate checks before splitting, and deterministic stratified 60% support-pool / 20% development / 20% held-out test partitions. Conflicting duplicate labels stop preparation. Geographic independence is not established by this image-level split.
-- Nested 1/5/10-shot support samples, shared across models and augmentation conditions. Full mode uses 20 paired trials. Augmented views do not count as new shots.
-- Frozen backbones in evaluation mode. ResNet uses pre-classifier pooled features; ConvNeXt retains its checkpoint's final normalization and pooled representation; ViT and DINOv2 use the final normalized class-token representation. Features are L2-normalized.
-- The same L2-regularized multinomial logistic-regression procedure for every model. C is chosen from `[0.1, 1, 10]` using development accuracy per trial; ties choose the smaller C. Development labels are additional selection data and are not included in the shot budget. Test labels do not select C or the preferred augmentation.
-- Separate support-only augmentation conditions: flip, rotation, translation, scaling, brightness/contrast, noise, blur and erasing. Full mode adds four views per original support image. No-augmentation and repeated-original controls are included. Development and test images receive deterministic preprocessing only.
-- Accuracy, Macro-F1, per-class recall, confusion matrices, and paired gains against each trial's no-augmentation baseline. JSON, CSV and development-selected augmentation tables are exported.
-
-Smoke mode uses 40 real images per class, one trial, one augmented view, ResNet-18, and none/repeat/flip conditions. Its results only establish that the workflow executes. Full mode is a substantial grid: 4 models × 10 conditions × 3 shot budgets × 20 trials = 2,400 classifier results. Plan the grid before reporting research results.
-
-## Storage and recovery
-
-In Colab, persistent storage is a new folder:
-
-```text
-MyDrive/ColabNotebooks/cs7643/EuroSATLowData/
-  data/EuroSAT.zip            Downloaded once and checksum-verified
-  cache/weights/             Downloaded backbone implementations and weights
-  cache/dataset-*.json        Duplicate-check manifests
-  cache/split-*.json          Exact image partitions
-  cache/features/            Original/augmented embeddings, saved in chunks
-  cache/experiments/         Trial manifests, numeric classifier checkpoints, completed results
-  outputs/<experiment-id>/   results.json, summary.csv, development-selected-policies.json
-```
-
-Extracted images live under `/content/eurosat-low-data` for fast reads. They are recreated from the persistent archive when Colab discards its runtime disk. No duplicated class-folder splits are written to Drive.
-
-Feature caches identify dataset contents, exact checkpoint IDs, preprocessing, augmentation policy, deterministic image/view seeds and software versions. Completed feature chunks survive interruption. Classifier parameters (`coef`, `intercept`, `classes`) are saved as numeric NPZ checkpoints; a JSON completion record is published afterward. A disconnected classifier trial repeats only that trial. Fully completed model results skip model loading and feature extraction on rerun.
-
-Original and augmented features are cached separately. All models use the same generated augmented image for a given image/policy/view seed. Reruns may still verify the archive and extract raw images after a runtime reset, but completed inference and classifier work is reused. There is no automatic cache deletion. Increment `PIPELINE_VERSION` when changing pipeline semantics or augmentation strengths.
-
-Each execution records hardware, device, software versions and UTC time alongside the experimental manifest. A cached result retains its original stage timings; a resumed execution is not a fresh accelerator benchmark.
-
-Your Mac's cache is separate from Drive. The first Colab run does not automatically receive local data, weights or results.
+The portable notebook embeds the package and needs no GitHub credentials. [notebooks/experiments.ipynb](notebooks/experiments.ipynb) is the readable research notebook for an installed checkout. Both contain dataset tables, six figures, four labeled implementation parts with TODO checkboxes, and one selected execution cell.
 
 ## Local development
 
-A fresh Python 3.11 environment is already installed at `.venv/` on this Mac. To recreate it elsewhere:
+Use Python 3.11 and run these commands from the repository root:
 
 ```sh
 python3.11 -m venv .venv
-./.venv/bin/python -m pip install -r requirements-local.txt
+source .venv/bin/activate
+python -m pip install -r requirements/local.txt
+python scripts/build_notebook.py
+python -m unittest discover -s tests -v
+python -m eurosat run --mode smoke
 ```
 
-Local checks deliberately use CUDA, Apple MPS or CPU instead of a cloud connection:
+Select `.venv` as the VS Code kernel for local work and set notebook `TARGET = 'local'`. Local runs use available CUDA, Apple MPS or CPU. Keep Colab's existing CUDA/PyTorch installation; `requirements/local.txt` is for local setup.
 
 ```sh
-./.venv/bin/python scripts/run.py
-./.venv/bin/python scripts/execute_notebook.py
-./.venv/bin/python -m unittest discover -s tests -v
+python -m eurosat explore --output docs/figures
+python scripts/execute_notebook.py
+python -m eurosat merge outputs/model-a/results.json outputs/model-b/results.json --output outputs/combined
 ```
 
-To check all four models on the smoke dataset:
+## Repository structure
 
-```sh
-./.venv/bin/python scripts/execute_notebook.py --models resnet18,convnext_tiny,vit_b_16,dinov2_vits14
+```text
+notebooks/experiments.ipynb   Dataset exploration, Parts A–D, selected experiment
+src/eurosat/
+  config.py, runtime.py       Presets, checkpoint identities and hardware checks
+  data.py, exploration.py     Verified data, splits, audit and figures
+  augment.py, models.py       Support transformations and four frozen adapters
+  features.py, cache.py       Chunked embeddings and atomic checkpoints
+  evaluation.py              Common classifier and paired metrics
+  pipeline.py, reporting.py   Execution and compatible teammate export merging
+  cli.py                     run / explore / merge commands
+scripts/                     Notebook generation and fresh-kernel execution
+requirements/local.txt       Local PyTorch pair and editable project installation
+tests/                       Data isolation, reproducibility and resume checks
+docs/                        Proposal, methodology, figures and team instructions
+TODO.md                      Checkoff plan with suggested four-person workstreams
 ```
 
-Rebuild `Start_Here.ipynb` after editing the canonical pipeline:
+Edit reusable behavior in `src/eurosat`, and notebook narrative in `scripts/build_notebook.py`; rebuild and commit the tracked notebook. `dist/`, environments, datasets, caches, execution outputs and results are ignored. CI checks the notebook, runs unit tests and builds the package.
 
-```sh
-./.venv/bin/python scripts/build_notebook.py
-```
+## Study and recovery
 
-The notebook includes the helpers for portability; a test verifies they match the module. Local execution output is saved in `work/Start_Here.executed.ipynb`. Large data, environments, caches and outputs are ignored by Git.
+The primary study uses all ten classes, deduplicated 60/20/20 support/development/test partitions, frozen ResNet-18, ConvNeXt-Tiny, ViT-B/16 and DINOv2, and the same development-tuned logistic regression. Full mode includes 20 paired trials, ten augmentation/control conditions and three shot budgets: 2,400 classifier results. Smoke scores are execution checks, not research findings.
 
-## Experimental limits and extensions
+Colab saves the archive, weights, feature chunks, classifier checkpoints and completed trial records to `MyDrive/ColabNotebooks/cs7643/EuroSATLowData`. Raw images are extracted to disposable runtime-local storage. Rerunning resumes matching cached work; a restart may need to extract images again. Local caches and Drive caches are separate. Changing relevant settings creates different cache identities; increment `PIPELINE_VERSION` for semantic code changes.
 
-Fixed initial augmentation strengths are: horizontal or vertical flip; rotation ±30°; translation ±22 pixels after resizing; scaling 0.8–1.2; brightness and contrast factors 0.7–1.3; Gaussian noise σ=0.05 before normalization; Gaussian blur with a 5×5 kernel and σ=0.1–1.5; and a square erasing region of side 22–67 pixels filled with 0.5 before normalization. These are explicit starting settings, not tuned optima.
-
-Full mode implements the primary original-plus-four-view comparison. To perform the proposal's selected nine-view comparisons, prespecify the model/policy subset and rerun with `config.views = 9` and `config.shots = [1]`; the numeric configuration distinguishes these artifacts. Cutout and backbone fine-tuning are optional extensions and are not in the default grid. Hardware and wall-clock conditions affect timing; cold model-load/download time is included in `original_feature_seconds`. This measures an end-to-end extraction stage, not isolated accelerator throughput. Spatially related samples may remain across partitions because geographic grouping metadata has not been established.
-
-See [validation](docs/validation.md) for executed checks and remaining cloud verification.
+Read [collaboration](docs/collaboration.md) for ownership, branches, shared Drive and merging; [methodology](docs/methodology.md) for protocol and limitations; [original-notebook migration](docs/migration.md) for what was retained or replaced; and [validation](docs/validation.md) for execution evidence.

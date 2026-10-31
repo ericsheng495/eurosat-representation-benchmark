@@ -1,0 +1,21 @@
+{
+  "augmentation_montage_view": 0,
+  "class_examples": [
+    "AnnualCrop/AnnualCrop_1809.jpg",
+    "Forest/Forest_1565.jpg",
+    "HerbaceousVegetation/HerbaceousVegetation_1568.jpg",
+    "Highway/Highway_1744.jpg",
+    "Industrial/Industrial_1551.jpg",
+    "Pasture/Pasture_1418.jpg",
+    "PermanentCrop/PermanentCrop_109.jpg",
+    "Residential/Residential_1885.jpg",
+    "River/River_1986.jpg",
+    "SeaLake/SeaLake_515.jpg"
+  ],
+  "example": "AnnualCrop/AnnualCrop_1809.jpg",
+  "geographic_scale": "not inferred",
+  "native_example_augmentation": "none",
+  "native_pixels": true,
+  "partition": "support",
+  "seed": 42
+}
