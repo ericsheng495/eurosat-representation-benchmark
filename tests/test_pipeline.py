@@ -158,15 +158,16 @@ class PipelineTests(unittest.TestCase):
     def test_portable_notebook_is_valid_and_helpers_match(self):
         from scripts.build_notebook import portable_source
         root = Path(__file__).resolve().parents[1]
-        notebook = nbformat.read(root / 'dist/eurosat_colab.ipynb', as_version=4)
+        notebook = nbformat.read(root / 'EuroSAT_Low_Data_Benchmark.ipynb', as_version=4)
         nbformat.validate(notebook)
         self.assertTrue(any(c.source == portable_source() for c in notebook.cells))
-        reference = nbformat.read(root / 'notebooks/experiments.ipynb', as_version=4)
-        self.assertTrue(any('project_imports' in c.metadata.get('tags', []) for c in reference.cells))
-        for nb in [notebook, reference]:
-            for cell in nb.cells:
-                if cell.cell_type == 'code':
-                    compile(cell.source, 'notebook', 'exec')
+        self.assertEqual(len(list(root.glob('*.ipynb'))), 1)
+        images = [o for c in notebook.cells for o in c.get('outputs', [])
+                  if 'image/png' in o.get('data', {})]
+        self.assertEqual(len(images), 6)
+        for cell in notebook.cells:
+            if cell.cell_type == 'code':
+                compile(cell.source, 'notebook', 'exec')
 
     def test_exploration_reports_measured_counts_and_rejects_leakage(self):
         from eurosat.exploration import dataset_profile, dataset_figures, FIGURE_NAMES

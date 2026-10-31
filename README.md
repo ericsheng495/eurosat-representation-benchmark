@@ -8,14 +8,15 @@ Native RGB support images from EuroSAT (Helber et al., 2019; Copernicus Sentinel
 
 ## Run in Colab
 
-1. Build the portable notebook: `python scripts/build_notebook.py` after installing the project below.
-2. Upload `dist/eurosat_colab.ipynb` to Colab and choose a **GPU** runtime.
+1. Rebuild the notebook after source changes: `python scripts/build_notebook.py` after installing the project below.
+2. Upload `EuroSAT_Low_Data_Benchmark.ipynb` to Colab and choose a **GPU** runtime.
 3. Run all cells and authorize Drive. Start with `MODE = 'smoke'` to check execution.
 4. For research runs set `MODE = 'full'`. Each teammate sets `ASSIGNMENT` to their backbone from Parts A–D.
 
 In VS Code, choose **Select Another Kernel → Colab → New Colab Server → GPU → Python 3 (ipykernel)**. The runtime must have an NVIDIA GPU; selecting Python on a TPU server does not change its hardware. The notebook checks the device before downloading data. Colab allocation and account authorization happen in your own account.
 
-The builder also refreshes the local `Start_Here.ipynb` compatibility copy. The portable notebook embeds the package and needs no GitHub credentials. [notebooks/experiments.ipynb](notebooks/experiments.ipynb) is the readable research notebook for an installed checkout. Both include saved dataset previews visible before execution, dataset tables, six figures, four labeled implementation parts with TODO checkboxes, and one selected execution cell.
+Open **[EuroSAT_Low_Data_Benchmark.ipynb](EuroSAT_Low_Data_Benchmark.ipynb)** for all notebook work. It embeds the package and needs no GitHub credentials when uploaded to Colab. Saved dataset previews are visible before execution, followed by dataset tables, six figures, four labeled implementation parts with TODO checkboxes, and one selected execution cell. The same file works locally in VS Code with `TARGET = 'local'`.
+
 
 ## Local development
 
@@ -41,7 +42,7 @@ python -m eurosat merge outputs/model-a/results.json outputs/model-b/results.jso
 ## Repository structure
 
 ```text
-notebooks/experiments.ipynb   Dataset exploration, Parts A–D, selected experiment
+EuroSAT_Low_Data_Benchmark.ipynb  One notebook: dataset exploration, Parts A–D, experiments
 src/eurosat/
   config.py, runtime.py       Presets, checkpoint identities and hardware checks
   data.py, exploration.py     Verified data, splits, audit and figures
@@ -56,6 +57,8 @@ tests/                       Data isolation, reproducibility and resume checks
 docs/                        Proposal, methodology, figures and team instructions
 TODO.md                      Checkoff plan with suggested four-person workstreams
 ```
+
+The executor saves cell outputs into this same notebook; it does not create another notebook copy. Rebuilding restores the clean notebook with saved dataset previews.
 
 Edit reusable behavior in `src/eurosat`, and notebook narrative in `scripts/build_notebook.py`; rebuild and commit the tracked notebook. `dist/`, environments, datasets, caches, execution outputs and results are ignored. CI checks the notebook, runs unit tests and builds the package.
 

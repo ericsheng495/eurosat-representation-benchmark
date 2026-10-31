@@ -1,8 +1,7 @@
-"""Build a thin research notebook and a self-contained Colab distribution."""
+"""Build the single self-contained EuroSAT research notebook."""
 import argparse
 import base64
 import json
-import shutil
 import ast
 import hashlib
 from pathlib import Path
@@ -37,12 +36,11 @@ def build():
 
 This notebook presents the dataset audit, experimental protocol and execution workflow. Development labels select settings; held-out query labels are reserved for evaluation. Smoke runs validate execution and are not final research results.
 
-**Colab:** upload the generated `dist/eurosat_colab.ipynb`, choose a GPU runtime (T4 or L4), then run all cells. In VS Code, select **Colab → New Colab Server → GPU → Python 3 (ipykernel)**. This tracked notebook imports the installed package; the generated Colab version embeds the same modules automatically.
+**Colab:** open `EuroSAT_Low_Data_Benchmark.ipynb`, choose a GPU runtime (T4 or L4), then run all cells. In VS Code, select **Colab → New Colab Server → GPU → Python 3 (ipykernel)**. This single notebook embeds the project modules and works in Colab or VS Code. For a local kernel, set `TARGET = 'local'`.
 '''),
         md('## 1. Runtime and execution scope'),
         code('''import os
 import sys
-import shutil
 import subprocess
 from pathlib import Path
 
@@ -165,7 +163,7 @@ Set `ASSIGNMENT` in section 1 to a backbone name to run only that model. The con
 
 **Suggested owner:** teammate 1 · **Reviewer:** teammate 4
 
-Implementation: [`data.py`](../src/eurosat/data.py), [`runtime.py`](../src/eurosat/runtime.py), [`models.py`](../src/eurosat/models.py), [`exploration.py`](../src/eurosat/exploration.py).
+Implementation: [`data.py`](src/eurosat/data.py), [`runtime.py`](src/eurosat/runtime.py), [`models.py`](src/eurosat/models.py), [`exploration.py`](src/eurosat/exploration.py).
 
 - [x] Verified RGB archive, decoded-pixel duplicate checks and class labels.
 - [x] Stratified 60/20/20 partitions and nested, paired 1/5/10-shot support sets.
@@ -185,7 +183,7 @@ print('Part A:', part_a_config.models)
 
 **Suggested owner:** teammate 2 · **Reviewer:** teammate 1
 
-Implementation: [`models.py`](../src/eurosat/models.py), [`augment.py`](../src/eurosat/augment.py), [`features.py`](../src/eurosat/features.py).
+Implementation: [`models.py`](src/eurosat/models.py), [`augment.py`](src/eurosat/augment.py), [`features.py`](src/eurosat/features.py).
 
 - [x] ImageNet-1K ConvNeXt-Tiny, pooled features and final checkpoint normalization.
 - [x] Flip, rotation, translation and scaling policies with deterministic image/view seeds.
@@ -204,7 +202,7 @@ print('Part B:', part_b_config.models)
 
 **Suggested owner:** teammate 3 · **Reviewer:** teammate 2
 
-Implementation: [`models.py`](../src/eurosat/models.py), [`augment.py`](../src/eurosat/augment.py), [`features.py`](../src/eurosat/features.py).
+Implementation: [`models.py`](src/eurosat/models.py), [`augment.py`](src/eurosat/augment.py), [`features.py`](src/eurosat/features.py).
 
 - [x] ImageNet-1K ViT-B/16 final normalized class-token representation.
 - [x] Brightness/contrast, noise, blur and erasing conditions, with support-only augmentation.
@@ -223,7 +221,7 @@ print('Part C:', part_c_config.models)
 
 **Suggested owner:** teammate 4 · **Reviewer:** teammate 3
 
-Implementation: [`models.py`](../src/eurosat/models.py), [`evaluation.py`](../src/eurosat/evaluation.py), [`reporting.py`](../src/eurosat/reporting.py).
+Implementation: [`models.py`](src/eurosat/models.py), [`evaluation.py`](src/eurosat/evaluation.py), [`reporting.py`](src/eurosat/reporting.py).
 
 - [x] Official pinned DINOv2 ViT-S/14 checkpoint and frozen class-token features.
 - [x] Common logistic regression, Macro-F1, recall, confusion matrices and paired gains.
@@ -280,40 +278,24 @@ print('Results, classifier records and development-selected policies:', results[
     notebook.metadata = {'kernelspec': {'display_name': 'Python 3', 'language': 'python', 'name': 'python3'},
                          'language_info': {'name': 'python'}, 'accelerator': 'GPU',
                          'colab': {'gpuType': 'T4', 'provenance': []}}
-    reference = ROOT / 'notebooks/experiments.ipynb'
-    reference.parent.mkdir(exist_ok=True)
-    for i, cell in enumerate(notebook.cells):
-        cell.id = 'cell-' + hashlib.sha256(f'{i}:{cell.source}'.encode()).hexdigest()[:12]
-    nbf.validate(notebook)
-    nbf.write(notebook, reference)
-    portable = nbf.from_dict(notebook)
-    for cell in portable.cells:
+    for cell in notebook.cells:
         if 'project_imports' in cell.metadata.get('tags', []):
             cell.source = portable_source()
             cell.metadata = {'tags': ['generated_project_source'], 'jupyter': {'source_hidden': True}}
-    portable.cells[0].source += '\n**Self-contained Colab build:** this copy embeds the package sources; no repository upload or GitHub token is required.\n'
-    for i, cell in enumerate(portable.cells):
+    for i, cell in enumerate(notebook.cells):
         cell.id = 'cell-' + hashlib.sha256(f'{i}:{cell.source}'.encode()).hexdigest()[:12]
-    destination = ROOT / 'dist/eurosat_colab.ipynb'
-    destination.parent.mkdir(exist_ok=True)
-    nbf.validate(portable)
-    nbf.write(portable, destination)
-    # Compatibility entry point for the notebook already open on this Mac.
-    entry = ROOT / 'Start_Here.ipynb'
-    if entry.exists() and entry.read_bytes() != destination.read_bytes():
-        backup = ROOT / 'work/refactor-backup/Start_Here.before-visualizations.ipynb'
-        backup.parent.mkdir(parents=True, exist_ok=True)
-        if not backup.exists():
-            shutil.copy2(entry, backup)
-    shutil.copy2(destination, entry)
-    return reference, destination
+    destination = ROOT / 'EuroSAT_Low_Data_Benchmark.ipynb'
+    nbf.validate(notebook)
+    nbf.write(notebook, destination)
+    return destination
+
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--check', action='store_true', help='Fail if the tracked notebook has drifted')
     args = parser.parse_args()
-    path = ROOT / 'notebooks/experiments.ipynb'
+    path = ROOT / 'EuroSAT_Low_Data_Benchmark.ipynb'
     before = nbf.read(path, as_version=4) if args.check and path.exists() else None
     outputs = build()
     if args.check:
@@ -322,4 +304,4 @@ if __name__ == '__main__':
         canonical = lambda nb: [(c.cell_type, c.source, dict(c.metadata)) for c in nb.cells]
         if before is None or canonical(before) != canonical(after):
             raise SystemExit('Tracked notebook is stale; run python scripts/build_notebook.py and commit it.')
-    print('\n'.join(map(str, outputs)))
+    print(outputs)

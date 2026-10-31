@@ -13,7 +13,7 @@ Checked on 2026-10-30 on the local Mac using Apple MPS, Python 3.11.5, PyTorch 2
 
 ## Local evidence
 
-`work/portable.executed.ipynb` and `work/reference.executed.ipynb` retain the latest executed portable and package-import notebooks. Per-experiment `outputs/<experiment-id>/results.json` records the real trial results and configuration. `work/tests.log` and `work/environment.freeze.txt` retain unit-test and dependency information. Local evidence, large artifacts and environments are ignored by Git.
+The earlier portable/reference copies were consolidated into `EuroSAT_Low_Data_Benchmark.ipynb`. The executor now saves outputs to that same notebook; the builder restores its clean cells and measured dataset previews. Superseded execution and backup notebook copies have been removed. Per-experiment `outputs/<experiment-id>/results.json` records the real trial results and configuration. `work/tests.log` and `work/environment.freeze.txt` retain unit-test and dependency information. Local evidence, large artifacts and environments are ignored by Git.
 
 ## Remaining cloud checks
 
@@ -29,4 +29,6 @@ The complete 2,400-result full-data research grid has not been executed. Smoke-r
 - Full dataset exploration measured 27,000 native 64×64 RGB images, ten classes, no decoded-pixel duplicates or corrupt images, and no image/pixel overlap across 16,200 / 5,400 / 5,400 partitions. Six PNG/PDF figures, CSV counts and JSON provenance were exported; class and augmentation montages were visually inspected.
 - Notebook regeneration check, dependency consistency check, and wheel/source-distribution build passed locally. CI configuration is included but has not run on GitHub.
 
-Evidence: `work/unit-checks.log`, `work/build.log`, the two executed notebooks, and `docs/figures/`. Some stages reuse existing caches; these elapsed times are workflow checks, not accelerator throughput comparisons.
+Evidence: `work/unit-checks.log`, `work/build.log`, the unified notebook, and `docs/figures/`. Some stages reuse existing caches; these elapsed times are workflow checks, not accelerator throughput comparisons.
+
+The unified `EuroSAT_Low_Data_Benchmark.ipynb` passed every cell in a fresh local kernel in 8.8 seconds after consolidation, including six live dataset figures and cached ResNet smoke results. Nine unit tests passed.

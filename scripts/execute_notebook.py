@@ -20,9 +20,9 @@ parser.add_argument('--notebook', type=Path, help='Defaults to the generated sel
 parser.add_argument('--output', type=Path)
 args = parser.parse_args()
 root = Path(__file__).resolve().parents[1]
-output = args.output or root / 'work/notebook.executed.ipynb'
+output = args.output or root / 'EuroSAT_Low_Data_Benchmark.ipynb'
 output.parent.mkdir(exist_ok=True)
-notebook = nbformat.read(args.notebook or root / 'dist/eurosat_colab.ipynb', as_version=4)
+notebook = nbformat.read(args.notebook or root / 'EuroSAT_Low_Data_Benchmark.ipynb', as_version=4)
 started = time.monotonic()
 def on_cell_start(cell, cell_index, **kwargs):
     if cell.cell_type == 'code':
