@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "eurosat-low-data"
+version = "0.1.0"
+description = "Frozen CNN and Transformer representations for few-shot EuroSAT classification"
+requires-python = ">=3.11"
+dependencies = [
+  "torch>=2.6,<3", "torchvision>=0.21,<1", "numpy>=1.26,<3",
+  "scikit-learn>=1.4,<1.8", "Pillow>=10,<13"
+]
+
+[project.optional-dependencies]
+notebook = ["nbformat>=5.10,<6", "nbclient>=0.10,<1", "ipykernel>=6,<8"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
