@@ -10,7 +10,7 @@ import nbformat as nbf
 ROOT = Path(__file__).resolve().parents[1]
 NOTEBOOK = ROOT / 'EuroSAT_Representation_Benchmark.ipynb'
 MODULE_ORDER = ['config', 'cache', 'runtime', 'augment', 'data', 'models',
-                'features', 'evaluation', 'pipeline', 'exploration', 'reporting']
+                'features', 'evaluation', 'pipeline', 'exploration', 'reporting', 'experiments']
 
 
 def source_blocks():
@@ -52,7 +52,11 @@ from pathlib import Path
 
 TARGET = os.environ.get('EUROSAT_TARGET', 'colab_gpu')
 MODE = os.environ.get('EUROSAT_MODE', 'smoke')  # Change to full after checking the workflow.
-ASSIGNMENT = os.environ.get('EUROSAT_ASSIGNMENT', 'dinov2_vits14')  # all or a backbone name from Parts A–D.
+ASSIGNMENT = os.environ.get('EUROSAT_ASSIGNMENT', 'dinov2_vits14')
+EXPERIMENT = os.environ.get('EUROSAT_EXPERIMENT', 'part-d' if ASSIGNMENT == 'dinov2_vits14' else 'primary')
+SELECT_STRENGTHS = True  # Development-only selection before the primary grid.
+INCLUDE_CUTOUT = False  # Optional proposal comparison.
+NINE_VIEW_METHODS = 2  # Select methods using primary development accuracy only.
 if TARGET not in {'colab_gpu', 'local'} or MODE not in {'smoke', 'full'}:
     raise ValueError('Choose TARGET colab_gpu/local and MODE smoke/full')
 if TARGET == 'colab_gpu':
@@ -108,7 +112,7 @@ All ten land-use classes are retained. Decoded-RGB duplicates are checked before
 
 Frozen backbones: ResNet-18, ConvNeXt-Tiny, ViT-B/16 and DINOv2 ViT-S/14. A shared multinomial logistic-regression procedure operates on L2-normalized embeddings. Development accuracy selects C and the preferred augmentation; test labels never select settings. The full preset uses 20 paired trials and original-plus-four-view conditions. See `docs/methodology.md` for strengths, checkpoint identities and interpretation limits.
 '''),
-        code('''config = Config.full() if MODE == 'full' else Config()
+        code('''config = part_d_config(MODE, INCLUDE_CUTOUT) if EXPERIMENT == 'part-d' else (Config.full() if MODE == 'full' else Config())
 if ASSIGNMENT != 'all':
     config.models = [ASSIGNMENT]
 for field in ['models', 'policies']:
@@ -232,9 +236,12 @@ Implementation: [`models.py`](src/eurosat/models.py), [`evaluation.py`](src/euro
 
 - [x] Official pinned DINOv2 ViT-S/14 checkpoint and frozen class-token features.
 - [x] Common logistic regression, Macro-F1, recall, confusion matrices and paired gains.
-- [ ] Complete the full DINOv2 grid and validate checkpoint/software provenance.
+- [x] Implement the complete DINOv2 main grid and record checkpoint/software provenance.
+- [x] Implement development-only strength selection, four-/nine-view label-budget comparisons and resumable suite execution.
+- [x] Export Macro-F1, class augmentation effects, negative findings and stage time/memory measurements.
+- [ ] Finish full-data execution on the intended GPU and review results.
 - [x] Validate complete paired exports and generate development-selected policy tables.
-- [ ] Merge all four full-grid assignments.
+- [ ] Merge all four full-grid assignments (depends on teammates A–C).
 - [x] Implement model-by-shot, paired augmentation-gain, class-recall and confusion-matrix figures.
 - [ ] Produce full-grid figures after the four model assignments complete.
 - [ ] Report development-label use, timing conditions, negative findings and pretraining confounds.
@@ -251,7 +258,15 @@ print('Part D:', part_d_config.models, '| pinned checkpoint:', MODEL_IDS['dinov2
 
 Only support images receive random augmentation. Development and test preprocessing are deterministic. Feature extraction is cached in chunks, classifier parameters are stored as numeric checkpoints, and completed trials are skipped. This cell does not repeat dataset cleaning or GPU work that has already completed for the same configuration.
 '''),
-        code('results = run(config, STORAGE, SCRATCH, target=TARGET)\n'),
+        code('''if EXPERIMENT == 'part-d':
+    suite = run_part_d(STORAGE, SCRATCH, target=TARGET, mode=MODE, config=config,
+                       select_strengths=SELECT_STRENGTHS, include_cutout=INCLUDE_CUTOUT,
+                       selected_methods=NINE_VIEW_METHODS)
+    results = suite['primary']
+else:
+    suite = None
+    results = run(config, STORAGE, SCRATCH, target=TARGET)
+'''),
         md('''## 8. Results and reporting
 
 Accuracy and Macro-F1 are fractions; paired improvements are percentage points relative to each trial's unaugmented baseline. Preferred policies are selected from development performance, while all prespecified comparisons remain available in the exported results. Smoke scores below validate execution only.
@@ -262,7 +277,7 @@ print('Results, classifier records and development-selected policies:', results[
 '''),
         md('''### Part D: visualize the completed results
 
-These figures use the selected run above. The baseline plots use the unaugmented condition; augmentation gains pair each trial with the same original support/query images. Error bars show trial standard deviation, not a confidence interval. Policies are selected from development accuracy only. Smoke figures check execution and are not paper results.
+The Part D suite uses 1-shot development labels to lock strengths, runs the primary grid, selects nine-view methods on primary development accuracy, and then evaluates the follow-up. These figures use the selected run above. The baseline plots use the unaugmented condition; augmentation gains pair each trial with the same original support/query images. Error bars show trial standard deviation, not a confidence interval. Policies are selected from development accuracy only. Smoke figures check execution and are not paper results.
 '''),
         code('''report = create_report(Path(results['output']) / 'results.json')
 for name, filename in report['figures'].items():
@@ -270,6 +285,12 @@ for name, filename in report['figures'].items():
     display(NotebookImage(filename=filename, width=900))
 display(pd.DataFrame(report['selected'])[['model', 'shots', 'policy', 'dev_accuracy', 'accuracy']].round(3))
 print('PNG/PDF figures, CSV tables and provenance:', report['output'])
+if suite is not None:
+    display(Markdown('**Proposal comparisons: labeled originals and added views**'))
+    for filename in suite['comparisons']['figures'].values():
+        display(NotebookImage(filename=filename, width=1100))
+    display(pd.read_csv(Path(suite['comparisons']['output']) / 'budget-summary.csv').round(3))
+    print('Nine-view methods selected on development accuracy:', suite['selected_methods'])
 '''),
     ]
     # Keep measured dataset previews visible before connecting a runtime.
@@ -312,7 +333,8 @@ print('PNG/PDF figures, CSV tables and provenance:', report['output'])
         'evaluation': 'Classifier selection and paired metrics',
         'pipeline': 'Run and resume experiments',
         'exploration': 'Dataset audit and visualization',
-        'reporting': 'Result figures, provenance and teammate export merging'
+        'reporting': 'Result figures, provenance and teammate export merging',
+        'experiments': 'Complete proposal-aligned Part D experiment suite'
     }
     implementation = []
     for number, (name, source) in enumerate(source_blocks(), 1):

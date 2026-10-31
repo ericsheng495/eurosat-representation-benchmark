@@ -13,10 +13,11 @@ from jupyter_client.kernelspec import KernelSpecManager
 
 def parse_args():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--models', default='resnet18')
-    parser.add_argument('--policies', default='none,repeat,flip')
-    parser.add_argument('--trials', type=int, default=1)
-    parser.add_argument('--views', type=int, default=1)
+    parser.add_argument('--models', default='dinov2_vits14')
+    parser.add_argument('--policies')
+    parser.add_argument('--trials', type=int)
+    parser.add_argument('--views', type=int)
+    parser.add_argument('--experiment', choices=['primary', 'part-d'])
     parser.add_argument('--notebook', type=Path, help='Defaults to the generated self-contained Colab notebook')
     parser.add_argument('--output', type=Path, help='Save outputs here; defaults to the input notebook')
     return parser.parse_args()
@@ -48,11 +49,16 @@ def main():
                                 kernel_spec_manager=KernelSpecManager(kernel_dirs=[temporary]))
         client = NotebookClient(notebook, km=manager, timeout=7200, iopub_timeout=120,
                                 on_cell_start=on_cell_start, on_cell_executed=on_cell_executed)
+        env = dict(os.environ, EUROSAT_TARGET='local', EUROSAT_MODE='smoke',
+                   EUROSAT_STORAGE=str(root), EUROSAT_MODELS=args.models,
+                   EUROSAT_EXPERIMENT=args.experiment or ('part-d' if args.models == 'dinov2_vits14' else 'primary'),
+                   MPLBACKEND='Agg')
+        for field in ['policies', 'trials', 'views']:
+            value = getattr(args, field)
+            if value is not None:
+                env['EUROSAT_' + field.upper()] = str(value)
         try:
-            client.execute(cwd=str(root), env=dict(os.environ, EUROSAT_TARGET='local',
-                           EUROSAT_MODE='smoke', EUROSAT_STORAGE=str(root), EUROSAT_MODELS=args.models,
-                           EUROSAT_POLICIES=args.policies, EUROSAT_TRIALS=str(args.trials),
-                           EUROSAT_VIEWS=str(args.views), MPLBACKEND='Agg'))
+            client.execute(cwd=str(root), env=env)
         finally:
             nbformat.write(notebook, output)
             if manager.has_kernel:

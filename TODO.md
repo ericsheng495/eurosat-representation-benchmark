@@ -37,21 +37,24 @@ Source: [project proposal](docs/project-proposal.pdf). Choose actual owners/revi
 - [ ] Prespecify selected 1-shot nine-view comparisons against 5/10 originals; run without changing original support samples.
 - [ ] Decide whether optional cutout merits a separate ablation.
 
-## Part D — DINOv2 and report integration
+## Part D — DINOv2 and complete proposal experiments
 
-- [x] Implement the pinned official frozen DINOv2 adapter and shared classifier path.
-- [x] Generate model-by-shot, paired augmentation-gain, class-recall and confusion-matrix figures.
-- [x] Export development-selected policies, paired trials, stage timings and software/checkpoint provenance.
-- [x] Add report validation tests for incomplete trials and development-only policy selection.
-- [x] Execute DINOv2 smoke validation: ten conditions × three shot budgets × two trials, four added views; save figures in the notebook.
-
-- [ ] Run the same full grid on DINOv2 ViT-S/14; verify pinned checkpoint identity.
-- [ ] Merge four complete compatible exports and verify paired trial completeness.
-- [ ] Produce model-by-shot, augmentation-gain and class-level figures with variability.
-- [ ] Report elapsed time, hardware, software and cold/warm-cache conditions.
-- [ ] Explain extra development labels and pretraining-data/model-size confounds.
-- [ ] Include negative results, geographic limitations, methods and dataset/checkpoint citations.
-- [ ] Review final paper and reproduce reported tables from saved exports.
+- [x] Official pinned frozen DINOv2, normalized class tokens and common logistic regression.
+- [x] Complete main grid: ten conditions, nested 1/5/10 shots, four added views and paired trials.
+- [x] Development-only strength selection, score caching and a locked shared configuration.
+- [x] Development-only selection of follow-up methods before nine-view test evaluation.
+- [x] Compare 1+4 views with 5 originals, 1+9 views with 10 originals, and 9 versus 4 views.
+- [x] Accuracy/Macro-F1 variability, paired gains, class-specific augmentation effects and confusion matrices.
+- [x] Record parameter/tensor size, model loading, extraction/fitting time, cache hits and practical memory use.
+- [x] Export negative findings, paired model contrasts, software/checkpoint provenance and interpretation notes.
+- [x] Support the optional cutout comparison without changing the default primary grid.
+- [x] Resumable suite runner and readable notebook execution/visualization cells.
+- [x] Meaningful tests for development selection, matched original supports and budget arithmetic.
+- [x] Execute and visualize the entire smoke suite; verify a fully cached rerun.
+- [ ] Complete full-data Part D execution and review the resulting report.
+- [ ] Have the team freeze/share strengths and agree on development-selection rules.
+- [ ] Merge all four compatible full-data exports after Parts A–C complete.
+- [ ] Independently review geographic/pretraining limitations and reproduce the final paper tables.
 
 ## Optional separate extensions
 

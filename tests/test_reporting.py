@@ -52,6 +52,29 @@ class ReportTests(unittest.TestCase):
         self.assertEqual(saved['mode'], 'smoke')
         self.assertIn('not a confidence interval', saved['variability'])
 
+    def test_cross_model_comparison_pairs_augmentation_gains(self):
+        from copy import deepcopy
+        import pandas as pd
+        report = deepcopy(self.report)
+        report['manifest']['config']['models'].append('resnet18')
+        report['manifest']['checkpoints']['resnet18'] = MODEL_IDS['resnet18']
+        for original in list(report['trials']):
+            row = deepcopy(original)
+            row['model'] = 'resnet18'
+            labels = np.tile(np.arange(10), 10)
+            predictions = labels.copy()
+            errors = (40 if row['policy'] == 'none' else 20) - row['trial'] * 10
+            predictions[:errors] = (predictions[:errors] + 1) % 10
+            row['test'] = score(labels, predictions)
+            report['trials'].append(row)
+        self.source.write_text(json.dumps(report))
+        result = create_report(self.source)
+        comparisons = pd.read_csv(Path(result['output']) / 'model-comparisons.csv')
+        flip = comparisons[comparisons.policy == 'flip']
+        np.testing.assert_allclose(flip.accuracy_difference_pp, 10.)
+        np.testing.assert_allclose(flip.augmentation_gain_difference_pp, -10.)
+        self.assertTrue((Path(result['output']) / 'model-comparison-summary.csv').exists())
+
     def test_report_rejects_incomplete_pairs_before_writing_figures(self):
         self.report['trials'].pop()
         self.source.write_text(json.dumps(self.report))

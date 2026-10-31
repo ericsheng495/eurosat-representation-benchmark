@@ -61,7 +61,7 @@ class PipelineTests(unittest.TestCase):
 
     def test_augmentation_is_reproducible_per_image_and_view(self):
         records = self.images(1)
-        for policy in settings.POLICIES:
+        for policy in settings.POLICIES + settings.OPTIONAL_POLICIES:
             if policy == 'repeat':
                 continue
             dataset = features.Images(self.root / 'images', records, [(0, 0), (0, 1)], policy, 42)

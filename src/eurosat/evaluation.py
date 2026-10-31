@@ -39,6 +39,9 @@ def summarize(rows):
         summary.append({'model': model, 'policy': policy, 'shots': shots, 'trials': len(group),
                         'accuracy': float(np.mean(scores)), 'accuracy_std': float(np.std(scores)),
                         'macro_f1': float(np.mean([r['test']['macro_f1'] for r in group])),
+                        'macro_f1_std': float(np.std([r['test']['macro_f1'] for r in group])),
+                        'paired_gain_std_percentage_points': float(np.std(gains) * 100),
+                        'fraction_nonpositive_gain': float(np.mean(np.array(gains) <= 0)),
                         'paired_gain_percentage_points': float(np.mean(gains) * 100),
                         'dev_accuracy': float(np.mean([r['dev_accuracy'] for r in group]))})
     return summary

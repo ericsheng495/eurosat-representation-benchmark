@@ -30,9 +30,10 @@ def run(config, storage, scratch, target='colab_gpu'):
     write_json(directory / 'manifest.json', manifest)
     hardware = (torch.cuda.get_device_name(0) if device.type == 'cuda'
                 else 'Apple GPU (MPS)' if device.type == 'mps' else 'CPU')
-    write_json(directory / f'execution-{time.time_ns()}.json',
-               {'utc': datetime.now(timezone.utc).isoformat(), 'device': str(device),
-                'hardware': hardware, 'target': target, 'versions': environment()})
+    execution_path = directory / f'execution-{time.time_ns()}.json'
+    execution = {'utc': datetime.now(timezone.utc).isoformat(), 'device': str(device),
+                 'hardware': hardware, 'target': target, 'versions': environment(), 'stages': []}
+    write_json(execution_path, execution)
     labels_all = np.array([r['label'] for r in records])
     all_items = [(i, 0) for i in range(len(records))]
     support_union = sorted({i for trial in trials for indices in trial.values() for i in indices})
@@ -47,8 +48,12 @@ def run(config, storage, scratch, target='colab_gpu'):
             continue
         started = time.perf_counter()
         model = load_backbone(model_name, device)
+        model_load_seconds = time.perf_counter() - started
+        stage = {'stage': 'original_features', 'model_load_seconds': model_load_seconds}
         original, _ = extract(storage, root, records, dataset_id, model_name, model,
-                               device, all_items, 'none', config)
+                               device, all_items, 'none', config, stats=stage)
+        execution['stages'].append(stage)
+        write_json(execution_path, execution)
         feature_seconds = time.perf_counter() - started
         for policy in config.policies:
             paths = [directory / (key([model_name, policy, trial, k]) + '.json')
@@ -60,8 +65,11 @@ def run(config, storage, scratch, target='colab_gpu'):
             aug_map = {}
             if policy not in {'none', 'repeat'}:
                 items = [(i, v) for i in support_union for v in range(config.views)]
+                stage = {'stage': 'augmented_features'}
                 augmented, _ = extract(storage, root, records, dataset_id, model_name, model,
-                                       device, items, policy, config)
+                                       device, items, policy, config, stats=stage)
+                execution['stages'].append(stage)
+                write_json(execution_path, execution)
                 aug_map = {item: j for j, item in enumerate(items)}
             for trial_number, trial in enumerate(trials):
                 for k in config.shots:
@@ -87,7 +95,9 @@ def run(config, storage, scratch, target='colab_gpu'):
                               'dev_accuracy': dev_accuracy,
                               'test': score(labels_all[split['test']], classifier.predict(original[split['test']])),
                               'classifier_fit_seconds': fit_seconds, 'original_feature_seconds': feature_seconds,
-                              'parameter_count': sum(p.numel() for p in model.parameters())}
+                              'parameter_count': sum(p.numel() for p in model.parameters()),
+                              'model_tensor_bytes': sum(p.numel() * p.element_size() for p in model.parameters()),
+                              'computed_on': {'device': str(device), 'hardware': hardware, 'execution': execution_path.name}}
                     # Numeric classifier checkpoint: reloadable without pickle/code execution.
                     write_npz(result_path.with_suffix('.npz'), coef=classifier.coef_,
                               intercept=classifier.intercept_, classes=classifier.classes_)
@@ -106,7 +116,8 @@ def run(config, storage, scratch, target='colab_gpu'):
     write_json(output / 'results.json', {'manifest': manifest, 'trials': rows, 'summary': summary,
                                         'executions': [json.loads(p.read_text()) for p in sorted(directory.glob('execution-*.json'))]})
     columns = ['model', 'policy', 'shots', 'trials', 'accuracy', 'accuracy_std', 'macro_f1',
-               'paired_gain_percentage_points', 'dev_accuracy']
+               'paired_gain_percentage_points', 'dev_accuracy', 'macro_f1_std',
+               'paired_gain_std_percentage_points', 'fraction_nonpositive_gain']
     stream = io.StringIO()
     writer = csv.DictWriter(stream, lineterminator='\n', fieldnames=columns)
     writer.writeheader()

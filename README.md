@@ -15,7 +15,7 @@ Native RGB support images from EuroSAT (Helber et al., 2019; Copernicus Sentinel
 
 In VS Code, choose **Select Another Kernel → Colab → New Colab Server → GPU → Python 3 (ipykernel)**. The runtime must have an NVIDIA GPU; selecting Python on a TPU server does not change its hardware. The notebook checks the device before downloading data. Colab allocation and account authorization happen in your own account.
 
-Open **[EuroSAT_Representation_Benchmark.ipynb](EuroSAT_Representation_Benchmark.ipynb)** for all notebook work. It contains the actual helper code in eleven labeled, readable cells and needs no GitHub credentials when uploaded to Colab. Saved dataset previews are visible before execution, followed by dataset tables, six figures, four labeled implementation parts with TODO checkboxes, and one selected execution cell. The same file works locally in VS Code with `TARGET = 'local'`.
+Open **[EuroSAT_Representation_Benchmark.ipynb](EuroSAT_Representation_Benchmark.ipynb)** for all notebook work. It contains the actual helper code in twelve labeled, readable cells and needs no GitHub credentials when uploaded to Colab. Saved dataset previews are visible before execution, followed by dataset tables, six figures, four labeled implementation parts with TODO checkboxes, and one selected execution cell. The same file works locally in VS Code with `TARGET = 'local'`.
 
 ## Local development
 
@@ -67,6 +67,7 @@ eurosat-representation-benchmark/
 | Logistic regression, metrics and paired summaries | `src/eurosat/evaluation.py` | Part D |
 | Merge teammate exports and generate result figures | `src/eurosat/reporting.py` | Part D; Section 8 |
 | Execution order and cache reuse | `src/eurosat/pipeline.py` | Section 7 |
+| Complete DINOv2 experiment suite | `src/eurosat/experiments.py` | Part D: strength selection, main grid and view budgets |
 | Terminal commands | `src/eurosat/cli.py` | `python -m eurosat --help` |
 | Notebook headings, TODO cells and execution checks | `scripts/build_notebook.py`, `execute_notebook.py` | Development tooling |
 
@@ -78,15 +79,15 @@ Edit reusable behavior in `src/eurosat`, and notebook narrative in `scripts/buil
 
 ## Part D: DINOv2 and result visualization
 
-Part D is implemented. The notebook defaults to `ASSIGNMENT = 'dinov2_vits14'`; use another assignment for Parts A–C. DINOv2 uses the official pinned ViT-S/14 checkpoint, frozen evaluation mode and the same development-tuned logistic regression as the other backbones.
+Part D includes the full proposal workflow. The notebook defaults to `ASSIGNMENT = 'dinov2_vits14'`; use another assignment for Parts A–C. DINOv2 uses the official pinned ViT-S/14 checkpoint, frozen evaluation mode and the same development-tuned logistic regression as the other backbones.
 
-Section 8 shows the completed run's accuracy-by-shot plot, paired augmentation gains, class recall and normalized confusion matrix. Error bars show trial standard deviation. Every plot is labeled when it comes from smoke mode. Saved smoke outputs validate the workflow; the full-data study remains on the TODO list.
+The suite selects strengths on development data, runs every four-view condition, then evaluates development-selected nine-view methods on the same 1-shot originals. Section 8 shows accuracy, Macro-F1, class effects, confusion matrices and the proposal's label/view-budget comparisons. Error bars show trial standard deviation. Every plot is labeled when it comes from smoke mode. Saved smoke outputs validate the workflow; the full-data study remains on the TODO list.
 
 ```sh
 # Quick DINOv2 execution check (three default conditions).
-python -m eurosat run --mode smoke --models dinov2_vits14
-# Full Part D grid; run on the intended GPU after freezing the protocol.
-python -m eurosat run --mode full --models dinov2_vits14
+python -m eurosat part-d --mode smoke
+# Full Part D suite; run on the intended GPU after freezing the protocol.
+python -m eurosat part-d --mode full
 # Generate PNG/PDF figures, CSVs and provenance from a completed export.
 python -m eurosat report outputs/EXPERIMENT_ID/results.json
 ```
