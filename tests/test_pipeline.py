@@ -160,7 +160,19 @@ class PipelineTests(unittest.TestCase):
         root = Path(__file__).resolve().parents[1]
         notebook = nbformat.read(root / 'EuroSAT_Low_Data_Benchmark.ipynb', as_version=4)
         nbformat.validate(notebook)
-        self.assertTrue(any(c.source == portable_source() for c in notebook.cells))
+        import base64
+        import zlib
+        payload = next(c for c in notebook.cells if
+                       'generated_project_payload' in c.metadata.get('tags', []))
+        namespace = {}
+        exec(payload.source, namespace)
+        decoded = zlib.decompress(base64.b64decode(namespace['_EUROSAT_SOURCE'])).decode()
+        self.assertEqual(decoded, portable_source())
+        self.assertTrue(payload.metadata['jupyter']['source_hidden'])
+        loader = next(c for c in notebook.cells if 'project_loader' in c.metadata.get('tags', []))
+        exec(loader.source, namespace)
+        self.assertTrue(callable(namespace['explore']))
+        self.assertEqual(namespace['Config']().models, ['resnet18'])
         self.assertEqual(len(list(root.glob('*.ipynb'))), 1)
         images = [o for c in notebook.cells for o in c.get('outputs', [])
                   if 'image/png' in o.get('data', {})]

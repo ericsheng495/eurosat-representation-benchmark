@@ -4,6 +4,7 @@ import base64
 import json
 import ast
 import hashlib
+import zlib
 from pathlib import Path
 import nbformat as nbf
 
@@ -89,7 +90,10 @@ STORAGE.mkdir(parents=True, exist_ok=True)
 print('Persistent archive, features and results:', STORAGE)
 print('Recreatable runtime-local image files:', SCRATCH)
 '''),
-        md('## 3. Project implementation'),
+        md('''## 3. Load project helpers
+
+Run the next two cells once. The collapsed cell stores a compressed copy of the helpers so this single notebook works in Colab without a repository upload. The short loader makes those helpers available; experiments start later. Read or edit the implementation in `src/eurosat/`, then rebuild the notebook.
+'''),
         code('''from dataclasses import asdict, replace
 import json
 from eurosat import Config, run
@@ -279,10 +283,22 @@ print('Results, classifier records and development-selected policies:', results[
     notebook.metadata = {'kernelspec': {'display_name': 'Python 3', 'language': 'python', 'name': 'python3'},
                          'language_info': {'name': 'python'}, 'accelerator': 'GPU',
                          'colab': {'gpuType': 'T4', 'provenance': []}}
-    for cell in notebook.cells:
-        if 'project_imports' in cell.metadata.get('tags', []):
-            cell.source = portable_source()
-            cell.metadata = {'tags': ['generated_project_source'], 'jupyter': {'source_hidden': True}}
+    index = next(i for i, c in enumerate(notebook.cells)
+                 if 'project_imports' in c.metadata.get('tags', []))
+    payload = base64.b64encode(zlib.compress(portable_source().encode(), level=9)).decode()
+    packed = code('# Generated project payload — edit src/eurosat/, then rebuild.\n'
+                  + '_EUROSAT_SOURCE = ' + repr(payload), metadata={
+                      'tags': ['generated_project_payload'],
+                      'jupyter': {'source_hidden': True}, 'collapsed': True,
+                      'colab': {'source_hidden': True}})
+    loader = code('''# Load the bundled helpers; no experiment runs in this cell.
+import base64
+import zlib
+exec(compile(zlib.decompress(base64.b64decode(_EUROSAT_SOURCE)),
+             'eurosat-bundled-helpers', 'exec'), globals())
+print('EuroSAT helpers ready. Continue to configuration and dataset exploration.')
+''', metadata={'tags': ['project_loader']})
+    notebook.cells[index:index + 1] = [packed, loader]
     for i, cell in enumerate(notebook.cells):
         cell.id = 'cell-' + hashlib.sha256(f'{i}:{cell.source}'.encode()).hexdigest()[:12]
     destination = ROOT / 'EuroSAT_Low_Data_Benchmark.ipynb'
