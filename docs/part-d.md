@@ -20,6 +20,7 @@ In Colab, use the notebook's `TARGET = 'colab_gpu'`; the CLI intentionally uses 
 | Official frozen DINOv2 ViT-S/14 | Pinned source revision `7764ea0f912e53c92e82eb78a2a1631e92725fc8`, final normalized class token, L2-normalized embeddings, gradients disabled and evaluation mode |
 | Ten classes and isolated partitions | Shared decoded-pixel duplicate audit and deterministic 60/20/20 support/development/query split |
 | Shared 1/5/10 originals per class | Nested samples, identical originals and deterministic views across conditions/models |
+| Conventional CNN baseline | ResNet-18 primary grid, using identical locked strengths, original supports, splits and classifier rules as DINOv2 |
 | Common downstream classifier | L2 multinomial logistic regression; C chosen from the shared grid on development accuracy |
 | Development-based augmentation strengths | At 1-shot, compare magnitude factors 0.5/1/1.5 using paired development scores; smaller strength breaks ties. Flip has no magnitude parameter. Query labels and query predictions are not used |
 | Main augmentation study | Original only, repeated-original control, and eight individual policies; original plus four views for each augmented condition |
@@ -32,7 +33,7 @@ In Colab, use the notebook's `TARGET = 'colab_gpu'`; the CLI intentionally uses 
 | Negative results and provenance | Nonpositive effects, paired model contrasts when other models are merged, software/checkpoint/data manifests, result hashes, execution records and interpretation notes |
 | Optional cutout | `INCLUDE_CUTOUT = True` or `--include-cutout`; never silently added to the primary grid |
 
-The default full primary grid produces 10 conditions × 3 shot budgets × 20 trials = **600 classifier records**. Two selected nine-view methods plus baseline/repeated-original controls produce **80 follow-up records**. Development tuning is a separate stage with **440 development-only fits** (C selection evaluates additional candidates within each fit procedure). Smoke uses two trials and 40 original tiles per class; it cannot support final scientific conclusions.
+The default full primary grid produces 10 conditions × 3 shot budgets × 20 trials = **600 classifier records**. Two selected nine-view methods plus baseline/repeated-original controls produce **80 follow-up records**. The matched ResNet-18 primary grid adds **600 baseline records** (disable explicitly with `--skip-resnet-baseline` only for a DINO-only report). Development tuning is a separate stage with **440 development-only fits** (C selection evaluates additional candidates within each fit procedure). Smoke uses two trials and 40 original tiles per class; it cannot support final scientific conclusions.
 
 ## Development labels and fair comparison
 
@@ -64,3 +65,5 @@ Trial standard deviation is not a confidence interval. Queries are reused across
 Extraction times distinguish cache reads and computation; do not sum a stage time repeated across classifier rows. Process RSS is a lifetime peak, CUDA allocated memory is a per-stage peak, and MPS allocated memory is an end-of-stage snapshot; report their different scopes. Execution metadata for older cached rows may not identify the original computation device.
 
 Implementation completion is separate from full-data execution and paper review. The checklist records those statuses independently. All current work stays local; no push is performed.
+
+Expanded metric definitions, per-class reports, model-baseline comparisons and conditional confidence intervals are documented in [metrics.md](metrics.md). The notebook displays the combined ResNet/DINO report by default.

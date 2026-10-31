@@ -45,6 +45,9 @@ Source: [project proposal](docs/project-proposal.pdf). Choose actual owners/revi
 - [x] Development-only selection of follow-up methods before nine-view test evaluation.
 - [x] Compare 1+4 views with 5 originals, 1+9 views with 10 originals, and 9 versus 4 views.
 - [x] Accuracy/Macro-F1 variability, paired gains, class-specific augmentation effects and confusion matrices.
+- [x] Add macro/per-class precision, F1 and query support, balanced accuracy, weighted F1, MCC and kappa.
+- [x] Add conditional 95% support-trial bootstrap intervals with a minimum-trial threshold.
+- [x] Include the matched ResNet-18 primary-grid baseline with paired model contrasts.
 - [x] Record parameter/tensor size, model loading, extraction/fitting time, cache hits and practical memory use.
 - [x] Export negative findings, paired model contrasts, software/checkpoint provenance and interpretation notes.
 - [x] Support the optional cutout comparison without changing the default primary grid.

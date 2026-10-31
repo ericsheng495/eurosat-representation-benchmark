@@ -7,7 +7,7 @@ from pathlib import Path
 
 from .cache import atomic, digest_file, key, write_json
 from .config import CLASSES, MODEL_IDS
-from .evaluation import summarize
+from .evaluation import complete_metrics, summarize, trial_interval
 from .exploration import STYLE, save_figure
 
 
@@ -72,7 +72,7 @@ def create_report(results, output=None):
 
     source = Path(results)
     report = json.loads(source.read_text())
-    manifest, rows = report['manifest'], report['trials']
+    manifest, rows = report['manifest'], [complete_metrics(r) for r in report['trials']]
     config = manifest['config']
     if not rows:
         raise ValueError('Report needs completed trials')
@@ -88,6 +88,9 @@ def create_report(results, output=None):
     frame = pd.DataFrame([{
         'model': r['model'], 'policy': r['policy'], 'shots': r['shots'], 'trial': r['trial'],
         'accuracy': r['test']['accuracy'], 'macro_f1': r['test']['macro_f1'],
+        'macro_precision': r['test'].get('macro_precision'), 'macro_recall': r['test'].get('macro_recall'),
+        'balanced_accuracy': r['test'].get('balanced_accuracy'), 'weighted_f1': r['test'].get('weighted_f1'),
+        'mcc': r['test'].get('mcc'), 'cohen_kappa': r['test'].get('cohen_kappa'),
         'dev_accuracy': r['dev_accuracy'], 'fit_seconds': r['classifier_fit_seconds'],
         'extraction_seconds': r['original_feature_seconds'], 'parameters': r['parameter_count']}
         for r in rows])
@@ -176,7 +179,11 @@ def create_report(results, output=None):
         save_figure(fig, output, names[3])
     names.extend(proposal_analysis(report, output))
     write_json(output / 'report.json', {'mode': config['mode'], 'trials': len(rows),
-               'models': config['models'], 'figures': names, 'variability': 'Population standard deviation across paired trials; not a confidence interval'})
+               'models': config['models'], 'figures': names,
+               'uncertainty': {'confidence_level': .95, 'method': 'percentile support-trial bootstrap',
+                               'resamples': 2000, 'seed': 42, 'minimum_trials': 5,
+                               'scope': 'Conditional on fixed query images; no spatial/generalization or multiplicity coverage'},
+               'variability': 'Population standard deviation across paired trials; not a confidence interval'})
     print('Result figures and tables:', output, flush=True)
     return {'output': str(output), 'figures': {name: str(output / f'{name}.png') for name in names},
             'selected': selected}
@@ -243,6 +250,9 @@ def compare_budgets(primary_file, nine_file, output):
     atomic(output / 'budget-comparisons.csv', lambda p: frame.to_csv(p, index=False))
     summary = frame.groupby(['comparison', 'model', 'policy']).difference_percentage_points.agg(
         mean='mean', std=lambda x: np.std(x, ddof=0), fraction_negative=lambda x: np.mean(x < 0)).reset_index()
+    intervals = frame.groupby(['comparison', 'model', 'policy']).difference_percentage_points.apply(
+        lambda values: pd.Series(dict(zip(['ci95_low', 'ci95_high'], trial_interval(values)))))
+    summary = summary.merge(intervals.unstack().reset_index(), on=['comparison', 'model', 'policy'])
     atomic(output / 'budget-summary.csv', lambda p: summary.to_csv(p, index=False))
     smoke = first['config']['mode'] == 'smoke'
     label = 'SMOKE CHECK — execution validation' if smoke else 'DINOv2 view-budget comparisons'
@@ -283,9 +293,18 @@ def proposal_analysis(report, output):
         for label, name in enumerate(CLASSES):
             class_rows.append({'model': row['model'], 'shots': row['shots'], 'policy': row['policy'],
                                'trial': row['trial'], 'class': name, 'recall': row['test']['class_recall'][label],
+                               'precision': row['test'].get('class_precision', [None] * len(CLASSES))[label],
+                               'f1': row['test'].get('class_f1', [None] * len(CLASSES))[label],
+                               'support': row['test'].get('class_support', [None] * len(CLASSES))[label],
                                'recall_gain_pp': 100 * (row['test']['class_recall'][label] - baseline['test']['class_recall'][label])})
     classes = pd.DataFrame(class_rows)
     atomic(output / 'class-effects.csv', lambda p: classes.to_csv(p, index=False))
+    classification = classes.groupby(['model', 'policy', 'shots', 'class']).agg(
+        precision=('precision', 'mean'), recall=('recall', 'mean'), f1=('f1', 'mean'),
+        precision_std=('precision', lambda x: np.std(x, ddof=0)),
+        recall_std=('recall', lambda x: np.std(x, ddof=0)), f1_std=('f1', lambda x: np.std(x, ddof=0)),
+        query_images_per_trial=('support', 'first')).reset_index()
+    atomic(output / 'classification-report.csv', lambda p: classification.to_csv(p, index=False))
     stage_rows = []
     for execution in report.get('executions', []):
         for stage in execution.get('stages', []):
@@ -312,7 +331,16 @@ def proposal_analysis(report, output):
         differences = comparison_table.groupby(['model', 'reference', 'policy', 'shots'])[
             ['accuracy_difference_pp', 'augmentation_gain_difference_pp']].agg(['mean', lambda x: np.std(x, ddof=0)])
         differences.columns = ['_'.join(column).replace('<lambda_0>', 'std') for column in differences.columns]
-        atomic(output / 'model-comparison-summary.csv', lambda p: differences.reset_index().to_csv(p, index=False))
+        differences = differences.reset_index()
+        intervals = []
+        for indices, group in comparison_table.groupby(['model', 'reference', 'policy', 'shots']):
+            record = dict(zip(['model', 'reference', 'policy', 'shots'], indices))
+            for metric in ['accuracy_difference_pp', 'augmentation_gain_difference_pp']:
+                record[metric + '_ci95_low'], record[metric + '_ci95_high'] = trial_interval(
+                    group.sort_values('trial')[metric])
+            intervals.append(record)
+        differences = differences.merge(pd.DataFrame(intervals), on=['model', 'reference', 'policy', 'shots'])
+        atomic(output / 'model-comparison-summary.csv', lambda p: differences.to_csv(p, index=False))
     summary = pd.DataFrame(summarize(rows))
     negatives = summary[(summary.policy != 'none') & (summary.paired_gain_percentage_points <= 0)]
     atomic(output / 'nonpositive-effects.csv', lambda p: negatives.to_csv(p, index=False))
@@ -354,4 +382,32 @@ def proposal_analysis(report, output):
                 axes[i, j].tick_params(axis='x', labelrotation=90, labelsize=7)
         fig.suptitle(label + '\nClass recall change versus paired baseline (percentage points)')
         save_figure(fig, output, 'class_augmentation_deltas')
-    return ['macro_f1_by_shot', 'class_augmentation_deltas']
+    extra = metric_overview(report, output)
+    return ['macro_f1_by_shot', 'class_augmentation_deltas', *extra]
+
+
+def metric_overview(report, output):
+    """Compare classification metrics against the fixed no-augmentation baseline."""
+    import matplotlib.pyplot as plt
+    summary = summarize(report['trials'])
+    config = report['manifest']['config']
+    metrics = [('accuracy', 'Accuracy'), ('macro_precision', 'Macro precision'),
+               ('macro_recall', 'Macro recall'), ('macro_f1', 'Macro-F1'),
+               ('weighted_f1', 'Weighted F1'), ('balanced_accuracy', 'Balanced accuracy')]
+    with plt.rc_context(STYLE):
+        fig, axes = plt.subplots(2, 3, figsize=(10, 5.8), layout='constrained')
+        for ax, (metric, title) in zip(axes.flat, metrics):
+            for model in config['models']:
+                rows = sorted([r for r in summary if r['model'] == model and r['policy'] == 'none'],
+                              key=lambda r: r['shots'])
+                if any(r.get(metric) is None for r in rows):
+                    continue
+                ax.errorbar([r['shots'] for r in rows], [r[metric] for r in rows],
+                            yerr=[r.get(metric + '_std', 0.) for r in rows],
+                            marker='o', capsize=2, label=model)
+            ax.set(title=title, xlabel='Original images per class', ylim=(0, 1), xticks=sorted(config['shots']))
+        axes[0, 0].legend(frameon=False)
+        fig.suptitle(('SMOKE CHECK — ' if config['mode'] == 'smoke' else '') +
+                     'No-augmentation model baselines; mean ± trial SD')
+        save_figure(fig, output, 'classification_metrics')
+    return ['classification_metrics']

@@ -56,6 +56,7 @@ ASSIGNMENT = os.environ.get('EUROSAT_ASSIGNMENT', 'dinov2_vits14')
 EXPERIMENT = os.environ.get('EUROSAT_EXPERIMENT', 'part-d' if ASSIGNMENT == 'dinov2_vits14' else 'primary')
 SELECT_STRENGTHS = True  # Development-only selection before the primary grid.
 INCLUDE_CUTOUT = False  # Optional proposal comparison.
+INCLUDE_RESNET_BASELINE = True  # Proposal's conventional CNN baseline, matched protocol.
 NINE_VIEW_METHODS = 2  # Select methods using primary development accuracy only.
 if TARGET not in {'colab_gpu', 'local'} or MODE not in {'smoke', 'full'}:
     raise ValueError('Choose TARGET colab_gpu/local and MODE smoke/full')
@@ -261,25 +262,32 @@ Only support images receive random augmentation. Development and test preprocess
         code('''if EXPERIMENT == 'part-d':
     suite = run_part_d(STORAGE, SCRATCH, target=TARGET, mode=MODE, config=config,
                        select_strengths=SELECT_STRENGTHS, include_cutout=INCLUDE_CUTOUT,
-                       selected_methods=NINE_VIEW_METHODS)
-    results = suite['primary']
+                       selected_methods=NINE_VIEW_METHODS, include_resnet=INCLUDE_RESNET_BASELINE)
+    results = suite['combined'] or suite['primary']
 else:
     suite = None
     results = run(config, STORAGE, SCRATCH, target=TARGET)
 '''),
         md('''## 8. Results and reporting
 
-Accuracy and Macro-F1 are fractions; paired improvements are percentage points relative to each trial's unaugmented baseline. Preferred policies are selected from development performance, while all prespecified comparisons remain available in the exported results. Smoke scores below validate execution only.
+Accuracy, precision, recall and F1 are fractions; paired improvements are percentage points relative to each trial's unaugmented baseline. Preferred policies are selected from development performance, while all prespecified comparisons remain available in the exported results. Smoke scores below validate execution only.
 '''),
         code('''table = pd.DataFrame(results['summary'])
-display(table.sort_values(['model', 'shots', 'policy']).reset_index(drop=True).round(3))
+columns = ['model', 'shots', 'policy', 'accuracy', 'macro_precision', 'macro_recall',
+           'macro_f1', 'balanced_accuracy', 'weighted_f1', 'paired_gain_percentage_points']
+display(table[columns].sort_values(['model', 'shots', 'policy']).reset_index(drop=True).round(3))
+intervals = ['model', 'shots', 'policy', 'accuracy_ci95_low', 'accuracy_ci95_high',
+             'macro_f1_ci95_low', 'macro_f1_ci95_high',
+             'paired_gain_percentage_points_ci95_low', 'paired_gain_percentage_points_ci95_high']
+display(table[intervals].round(3))
+print('95% intervals bootstrap support trials conditional on fixed queries; unavailable below 5 trials.')
 print('Results, classifier records and development-selected policies:', results['output'])
 '''),
-        md('''### Part D: visualize the completed results
+        md('''### Part D: visualize metrics and proposal baselines
 
-The Part D suite uses 1-shot development labels to lock strengths, runs the primary grid, selects nine-view methods on primary development accuracy, and then evaluates the follow-up. These figures use the selected run above. The baseline plots use the unaugmented condition; augmentation gains pair each trial with the same original support/query images. Error bars show trial standard deviation, not a confidence interval. Policies are selected from development accuracy only. Smoke figures check execution and are not paper results.
+The Part D suite uses 1-shot development labels to lock strengths, runs the primary grid, selects nine-view methods on primary development accuracy, and then evaluates the follow-up. These figures use the selected run above. The ResNet-18 baseline uses identical partitions, supports, strengths and classifier rules. No-augmentation and repeated-original controls are retained. The baseline plots use the unaugmented condition; augmentation gains pair each trial with the same original support/query images. Error bars show trial standard deviation, not a confidence interval. Policies are selected from development accuracy only. Smoke figures check execution and are not paper results.
 '''),
-        code('''report = create_report(Path(results['output']) / 'results.json')
+        code('''report = (suite['comparison_report'] or suite['primary_report']) if suite is not None else create_report(Path(results['output']) / 'results.json')
 for name, filename in report['figures'].items():
     display(Markdown('**' + name.replace('_', ' ').capitalize() + '**'))
     display(NotebookImage(filename=filename, width=900))
@@ -291,6 +299,8 @@ if suite is not None:
         display(NotebookImage(filename=filename, width=1100))
     display(pd.read_csv(Path(suite['comparisons']['output']) / 'budget-summary.csv').round(3))
     print('Nine-view methods selected on development accuracy:', suite['selected_methods'])
+classification = pd.read_csv(Path(report['output']) / 'classification-report.csv')
+display(classification[(classification.policy == 'none') & (classification.shots == max(config.shots))].round(3))
 '''),
     ]
     # Keep measured dataset previews visible before connecting a runtime.

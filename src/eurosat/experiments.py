@@ -13,7 +13,7 @@ from .evaluation import fit_classifier
 from .features import extract
 from .models import load_backbone
 from .pipeline import run
-from .reporting import compare_budgets, create_report
+from .reporting import compare_budgets, create_report, merge_results
 from .runtime import check_device, environment
 
 
@@ -119,7 +119,7 @@ def select_nine_view_methods(primary, count=2):
 
 
 def run_part_d(storage, scratch, target='colab_gpu', mode='full', *,
-               select_strengths=True, include_cutout=False, selected_methods=2, config=None):
+               select_strengths=True, include_cutout=False, selected_methods=2, config=None, include_resnet=True):
     """Run and resume all required DINOv2 comparisons without touching GitHub."""
     if selected_methods < 1:
         raise ValueError('Select at least one nine-view method')
@@ -131,12 +131,12 @@ def run_part_d(storage, scratch, target='colab_gpu', mode='full', *,
     storage = prepare_storage(storage)
     _, _, _, dataset_id = prepare_data(storage, scratch, config)
     suite_id = key({'suite': 'part-d-v1', 'dataset': dataset_id, 'config': asdict(config),
-                    'strength_selection': select_strengths, 'strength_candidates': [.5, 1., 1.5],
+                    'include_resnet_baseline': include_resnet, 'strength_selection': select_strengths, 'strength_candidates': [.5, 1., 1.5],
                     'selected_methods': selected_methods,
                     'versions': environment()})
     directory = storage / 'outputs/part-d' / suite_id
     directory.mkdir(parents=True, exist_ok=True)
-    plan = {'mode': mode, 'primary': asdict(config), 'strength_selection': select_strengths,
+    plan = {'mode': mode, 'primary': asdict(config), 'include_resnet_baseline': include_resnet, 'strength_selection': select_strengths,
             'strength_candidates': [.5, 1., 1.5], 'strength_selection_shots': 1,
             'nine_view_method_selection': '1-shot primary development accuracy; name tie-break',
             'selected_methods': selected_methods, 'dataset': dataset_id}
@@ -149,6 +149,12 @@ def run_part_d(storage, scratch, target='colab_gpu', mode='full', *,
     primary = run(config, storage, scratch, target)
     primary_file = Path(primary['output']) / 'results.json'
     primary_report = create_report(primary_file)
+    resnet, combined, comparison_report = None, None, None
+    if include_resnet:
+        # Identical strengths, original supports, splits and classifier rules.
+        resnet = run(replace(config, models=['resnet18']), storage, scratch, target)
+        combined = merge_results([primary_file, Path(resnet['output']) / 'results.json'], directory / 'model-baseline')
+        comparison_report = create_report(Path(combined['output']) / 'results.json')
     methods = select_nine_view_methods(primary, selected_methods)
     # This artifact is written before evaluating any nine-view query predictions.
     write_json(directory / 'nine-view-selection.json', {'policies': methods, 'selected_using': 'development accuracy'})
@@ -159,6 +165,7 @@ def run_part_d(storage, scratch, target='colab_gpu', mode='full', *,
     comparisons = compare_budgets(primary_file, nine_file, directory / 'comparisons')
     result = {'mode': mode, 'output': str(directory), 'primary': primary, 'nine_view': nine,
               'primary_report': primary_report, 'nine_view_report': nine_report,
+              'resnet_baseline': resnet, 'combined': combined, 'comparison_report': comparison_report,
               'comparisons': comparisons, 'selected_methods': methods,
               'seconds_this_execution': time.perf_counter() - started}
     write_json(directory / 'suite.json', result)

@@ -45,6 +45,25 @@ class ExperimentTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 replace(config, policy_strengths=strengths).validate()
 
+    def test_resnet_baseline_reuses_locked_dino_configuration(self):
+        configurations = []
+        def recorded(config, *args):
+            configurations.append(config)
+            return {'output': str(self.root / (config.models[0] + str(config.views))),
+                    'summary': [{'shots': 1, 'policy': 'flip', 'dev_accuracy': .7}]}
+        with patch.object(experiments, 'prepare_data', return_value=(None, [], {}, 'same-data')), \
+                patch.object(experiments, 'tune_strengths', return_value={'selected_strengths': {'rotation': .5}}), \
+                patch.object(experiments, 'run', side_effect=recorded), \
+                patch.object(experiments, 'create_report', return_value={'figures': {}, 'output': 'synthetic'}), \
+                patch.object(experiments, 'merge_results', return_value={'output': str(self.root / 'combined')}), \
+                patch.object(experiments, 'compare_budgets', return_value={}):
+            experiments.run_part_d(self.root, self.root, 'local', mode='smoke')
+        self.assertEqual([c.models for c in configurations], [['dinov2_vits14'], ['resnet18'], ['dinov2_vits14']])
+        dino, resnet = asdict(configurations[0]), asdict(configurations[1])
+        dino.pop('models'); resnet.pop('models')
+        self.assertEqual(dino, resnet)
+        self.assertEqual(dino['policy_strengths'], {'rotation': .5})
+
     def test_nine_view_method_selection_ignores_test_scores(self):
         primary = {'summary': [
             {'shots': 1, 'policy': 'flip', 'dev_accuracy': .8, 'accuracy': .1},

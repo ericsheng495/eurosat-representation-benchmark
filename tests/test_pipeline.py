@@ -144,6 +144,28 @@ class PipelineTests(unittest.TestCase):
             self.assertEqual(trial['classifier_rows'], expected)
         self.assertEqual(len(list((self.root / 'cache/experiments').rglob('*.npz'))), 4)
 
+    def test_new_metrics_upgrade_cached_trials_without_models_or_refitting(self):
+        records = self.images()
+        split = data.stratified_split(records, 42)
+        config = settings.Config(shots=[1], policies=['none'], classifier_cs=[1.])
+        fixture = (self.root / 'images', records, split, 'synthetic')
+        with patch.object(p, 'check_device', return_value=torch.device('cpu')), \
+                patch.object(p, 'prepare_data', return_value=fixture), \
+                patch.object(p, 'load_backbone', return_value=MeanFeatures()):
+            result = p.run(config, self.root, self.root / 'scratch', 'local')
+            trial = next(path for path in (self.root / 'cache/experiments' / result['experiment']).glob('*.json')
+                         if 'test' in json.loads(path.read_text()))
+            old = json.loads(trial.read_text())
+            old['test'] = {key: value for key, value in old['test'].items()
+                           if key in {'accuracy', 'macro_f1', 'class_recall', 'confusion_matrix'}}
+            trial.write_text(json.dumps(old))
+            checkpoints = {path: path.stat().st_mtime_ns for path in (self.root / 'cache').rglob('*.npz')}
+            with patch.object(p, 'load_backbone', side_effect=AssertionError('No model loading')), \
+                    patch.object(p, 'fit_classifier', side_effect=AssertionError('No refitting')):
+                p.run(config, self.root, self.root / 'scratch', 'local')
+            self.assertIn('macro_precision', json.loads(trial.read_text())['test'])
+            self.assertEqual(checkpoints, {path: path.stat().st_mtime_ns for path in checkpoints})
+
     def test_failed_atomic_write_preserves_previous_checkpoint(self):
         path = self.root / 'checkpoint.npz'
         path.write_bytes(b'previous')

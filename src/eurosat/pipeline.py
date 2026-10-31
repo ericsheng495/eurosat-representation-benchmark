@@ -10,7 +10,7 @@ import torch
 from .cache import atomic, key, prepare_storage, write_json, write_npz
 from .config import Config, CLASSES, MODEL_IDS
 from .data import prepare_data, make_trials
-from .evaluation import fit_classifier, score, summarize
+from .evaluation import complete_metrics, fit_classifier, score, summarize
 from .features import extract
 from .models import load_backbone
 from .runtime import check_device, environment
@@ -37,13 +37,22 @@ def run(config, storage, scratch, target='colab_gpu'):
     labels_all = np.array([r['label'] for r in records])
     all_items = [(i, 0) for i in range(len(records))]
     support_union = sorted({i for trial in trials for indices in trial.values() for i in indices})
+    def load_result(path):
+        row = json.loads(path.read_text())
+        previous = dict(row['test'])
+        complete_metrics(row)
+        # Enrich an existing completed trial while retaining its classifier and features.
+        if row['test'] != previous:
+            write_json(path, row)
+        return row
+
     rows = []
     for model_name in config.models:
         # A fully completed model is skipped without loading its weights or features.
         result_paths = [directory / (key([model_name, p, trial, k]) + '.json')
                         for p in config.policies for trial in range(config.trials) for k in config.shots]
         if all(p.exists() for p in result_paths):
-            rows.extend(json.loads(p.read_text()) for p in result_paths)
+            rows.extend(load_result(p) for p in result_paths)
             print('Completed results reused:', model_name, flush=True)
             continue
         started = time.perf_counter()
@@ -59,7 +68,7 @@ def run(config, storage, scratch, target='colab_gpu'):
             paths = [directory / (key([model_name, policy, trial, k]) + '.json')
                      for trial in range(config.trials) for k in config.shots]
             if all(path.exists() for path in paths):
-                rows.extend(json.loads(path.read_text()) for path in paths)
+                rows.extend(load_result(path) for path in paths)
                 continue
             augmented = None
             aug_map = {}
@@ -75,7 +84,7 @@ def run(config, storage, scratch, target='colab_gpu'):
                 for k in config.shots:
                     result_path = directory / (key([model_name, policy, trial_number, k]) + '.json')
                     if result_path.exists():
-                        rows.append(json.loads(result_path.read_text()))
+                        rows.append(load_result(result_path))
                         continue
                     indices = trial[str(k)]
                     x, y = original[indices], labels_all[indices]
@@ -115,9 +124,7 @@ def run(config, storage, scratch, target='colab_gpu'):
     output.mkdir(parents=True, exist_ok=True)
     write_json(output / 'results.json', {'manifest': manifest, 'trials': rows, 'summary': summary,
                                         'executions': [json.loads(p.read_text()) for p in sorted(directory.glob('execution-*.json'))]})
-    columns = ['model', 'policy', 'shots', 'trials', 'accuracy', 'accuracy_std', 'macro_f1',
-               'paired_gain_percentage_points', 'dev_accuracy', 'macro_f1_std',
-               'paired_gain_std_percentage_points', 'fraction_nonpositive_gain']
+    columns = list(summary[0])
     stream = io.StringIO()
     writer = csv.DictWriter(stream, lineterminator='\n', fieldnames=columns)
     writer.writeheader()

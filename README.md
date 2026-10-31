@@ -77,9 +77,15 @@ The executor saves cell outputs into this same notebook; it does not create anot
 
 Edit reusable behavior in `src/eurosat`, and notebook narrative in `scripts/build_notebook.py`; rebuild and commit the tracked notebook. `dist/`, environments, datasets, caches and raw result exports are ignored; reviewed notebook outputs are retained. CI checks the notebook, runs unit tests and builds the package.
 
+## Metrics and baselines
+
+We report accuracy, Macro-F1, macro precision/recall, balanced accuracy, weighted F1, per-class precision/recall/F1 and query counts, confusion matrices, MCC and Cohen's kappa. Paired augmentation/model/budget differences have trial SDs and conditional 95% confidence intervals when enough trials are available. Time, memory, model size and cache usage are recorded separately.
+
+The proposal's baselines are explicit: matched **ResNet-18 versus DINOv2**, no augmentation, repeated-original controls, and 5-/10-original label budgets. Model and augmentation selection still use development accuracy only. See [metric definitions and uncertainty limits](docs/metrics.md).
+
 ## Part D: DINOv2 and result visualization
 
-Part D includes the full proposal workflow. The notebook defaults to `ASSIGNMENT = 'dinov2_vits14'`; use another assignment for Parts A–C. DINOv2 uses the official pinned ViT-S/14 checkpoint, frozen evaluation mode and the same development-tuned logistic regression as the other backbones.
+Part D includes the full proposal workflow and the matched ResNet-18 comparison baseline. The notebook defaults to `ASSIGNMENT = 'dinov2_vits14'`; use another assignment for Parts A–C. DINOv2 uses the official pinned ViT-S/14 checkpoint, frozen evaluation mode and the same development-tuned logistic regression as the other backbones.
 
 The suite selects strengths on development data, runs every four-view condition, then evaluates development-selected nine-view methods on the same 1-shot originals. Section 8 shows accuracy, Macro-F1, class effects, confusion matrices and the proposal's label/view-budget comparisons. Error bars show trial standard deviation. Every plot is labeled when it comes from smoke mode. Saved smoke outputs validate the workflow; the full-data study remains on the TODO list.
 
