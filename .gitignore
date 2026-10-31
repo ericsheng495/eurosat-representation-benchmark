@@ -16,3 +16,6 @@ dist/
 build/
 .coverage
 .pytest_cache/
+
+# Generated portable compatibility entry point
+/Start_Here.ipynb

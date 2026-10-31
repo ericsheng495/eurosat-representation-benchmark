@@ -15,7 +15,7 @@ Native RGB support images from EuroSAT (Helber et al., 2019; Copernicus Sentinel
 
 In VS Code, choose **Select Another Kernel → Colab → New Colab Server → GPU → Python 3 (ipykernel)**. The runtime must have an NVIDIA GPU; selecting Python on a TPU server does not change its hardware. The notebook checks the device before downloading data. Colab allocation and account authorization happen in your own account.
 
-The portable notebook embeds the package and needs no GitHub credentials. [notebooks/experiments.ipynb](notebooks/experiments.ipynb) is the readable research notebook for an installed checkout. Both contain dataset tables, six figures, four labeled implementation parts with TODO checkboxes, and one selected execution cell.
+The builder also refreshes the local `Start_Here.ipynb` compatibility copy. The portable notebook embeds the package and needs no GitHub credentials. [notebooks/experiments.ipynb](notebooks/experiments.ipynb) is the readable research notebook for an installed checkout. Both include saved dataset previews visible before execution, dataset tables, six figures, four labeled implementation parts with TODO checkboxes, and one selected execution cell.
 
 ## Local development
 

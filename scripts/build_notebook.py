@@ -1,5 +1,8 @@
 """Build a thin research notebook and a self-contained Colab distribution."""
 import argparse
+import base64
+import json
+import shutil
 import ast
 import hashlib
 from pathlib import Path
@@ -250,6 +253,30 @@ display(table.sort_values(['model', 'shots', 'policy']).reset_index(drop=True))
 print('Results, classifier records and development-selected policies:', results['output'])
 '''),
     ]
+    # Keep measured dataset previews visible before connecting a runtime.
+    # Running the EDA cell replaces these saved outputs with the current audit.
+    audit = next(c for c in notebook.cells if c.cell_type == 'code' and
+                 'dataset = explore(STORAGE, SCRATCH, config)' in c.source)
+    figures = ROOT / 'docs/figures'
+    profile = json.loads((figures / 'dataset_profile.json').read_text())
+    audit.outputs = [nbf.v4.new_output('display_data', data={'text/markdown':
+        '**Saved dataset preview** — measured from the verified EuroSAT archive. '
+        'Run this cell to refresh the audit for your storage and configuration.\n\n'
+        f"**{profile['images']:,} images · {profile['classes']} classes · "
+        f"{profile['duplicates_removed']} exact duplicates removed.**"})]
+    previews = [('cleaning_audit', 'Cleaning: original and retained image counts'),
+                ('class_distribution', 'Class balance and support/development/test partitions'),
+                ('example_tile', 'One native RGB support image: Annual crop'),
+                ('class_examples', 'Native support images from all ten classes'),
+                ('stratified_shuffle', 'Actual stratified shuffling before partitioning'),
+                ('augmentation_examples', 'Processed support-image augmentation examples')]
+    for name, caption in previews:
+        audit.outputs.append(nbf.v4.new_output('display_data', data={
+            'text/markdown': '**' + caption + '**'}))
+        audit.outputs.append(nbf.v4.new_output('display_data', data={
+            'image/png': base64.b64encode((figures / (name + '.png')).read_bytes()).decode(),
+            'text/plain': caption}, metadata={'image/png': {
+                'width': 360 if name == 'example_tile' else 820}}))
     notebook.metadata = {'kernelspec': {'display_name': 'Python 3', 'language': 'python', 'name': 'python3'},
                          'language_info': {'name': 'python'}, 'accelerator': 'GPU',
                          'colab': {'gpuType': 'T4', 'provenance': []}}
@@ -271,6 +298,14 @@ print('Results, classifier records and development-selected policies:', results[
     destination.parent.mkdir(exist_ok=True)
     nbf.validate(portable)
     nbf.write(portable, destination)
+    # Compatibility entry point for the notebook already open on this Mac.
+    entry = ROOT / 'Start_Here.ipynb'
+    if entry.exists() and entry.read_bytes() != destination.read_bytes():
+        backup = ROOT / 'work/refactor-backup/Start_Here.before-visualizations.ipynb'
+        backup.parent.mkdir(parents=True, exist_ok=True)
+        if not backup.exists():
+            shutil.copy2(entry, backup)
+    shutil.copy2(destination, entry)
     return reference, destination
 
 
