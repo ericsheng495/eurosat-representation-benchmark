@@ -10,7 +10,7 @@ import nbformat as nbf
 ROOT = Path(__file__).resolve().parents[1]
 NOTEBOOK = ROOT / 'EuroSAT_Representation_Benchmark.ipynb'
 MODULE_ORDER = ['config', 'cache', 'runtime', 'augment', 'data', 'models',
-                'features', 'evaluation', 'pipeline', 'exploration']
+                'features', 'evaluation', 'pipeline', 'exploration', 'reporting']
 
 
 def source_blocks():
@@ -52,7 +52,7 @@ from pathlib import Path
 
 TARGET = os.environ.get('EUROSAT_TARGET', 'colab_gpu')
 MODE = os.environ.get('EUROSAT_MODE', 'smoke')  # Change to full after checking the workflow.
-ASSIGNMENT = os.environ.get('EUROSAT_ASSIGNMENT', 'all')  # all or a backbone name from Parts A–D.
+ASSIGNMENT = os.environ.get('EUROSAT_ASSIGNMENT', 'dinov2_vits14')  # all or a backbone name from Parts A–D.
 if TARGET not in {'colab_gpu', 'local'} or MODE not in {'smoke', 'full'}:
     raise ValueError('Choose TARGET colab_gpu/local and MODE smoke/full')
 if TARGET == 'colab_gpu':
@@ -233,8 +233,10 @@ Implementation: [`models.py`](src/eurosat/models.py), [`evaluation.py`](src/euro
 - [x] Official pinned DINOv2 ViT-S/14 checkpoint and frozen class-token features.
 - [x] Common logistic regression, Macro-F1, recall, confusion matrices and paired gains.
 - [ ] Complete the full DINOv2 grid and validate checkpoint/software provenance.
-- [ ] Merge compatible model exports and check trial completeness/paired comparisons.
-- [ ] Prepare model-by-shot, augmentation-gain and class-level result figures.
+- [x] Validate complete paired exports and generate development-selected policy tables.
+- [ ] Merge all four full-grid assignments.
+- [x] Implement model-by-shot, paired augmentation-gain, class-recall and confusion-matrix figures.
+- [ ] Produce full-grid figures after the four model assignments complete.
 - [ ] Report development-label use, timing conditions, negative findings and pretraining confounds.
 - [ ] Coordinate final methods, limitations and citations; do not attribute DINOv2/ViT differences to self-supervision alone.
 '''),
@@ -242,7 +244,8 @@ Implementation: [`models.py`](src/eurosat/models.py), [`evaluation.py`](src/euro
 # combine completed exports through reporting.py rather than hand-editing CSVs.
 # Set ASSIGNMENT = 'dinov2_vits14' in section 1 to execute this model only.
 part_d_config = replace(config, models=['dinov2_vits14'])
-print('Part D:', part_d_config.models)
+part_d_config.validate()
+print('Part D:', part_d_config.models, '| pinned checkpoint:', MODEL_IDS['dinov2_vits14'])
 '''),
         md('''## 7. Run or resume the selected experiment
 
@@ -256,6 +259,17 @@ Accuracy and Macro-F1 are fractions; paired improvements are percentage points r
         code('''table = pd.DataFrame(results['summary'])
 display(table.sort_values(['model', 'shots', 'policy']).reset_index(drop=True).round(3))
 print('Results, classifier records and development-selected policies:', results['output'])
+'''),
+        md('''### Part D: visualize the completed results
+
+These figures use the selected run above. The baseline plots use the unaugmented condition; augmentation gains pair each trial with the same original support/query images. Error bars show trial standard deviation, not a confidence interval. Policies are selected from development accuracy only. Smoke figures check execution and are not paper results.
+'''),
+        code('''report = create_report(Path(results['output']) / 'results.json')
+for name, filename in report['figures'].items():
+    display(Markdown('**' + name.replace('_', ' ').capitalize() + '**'))
+    display(NotebookImage(filename=filename, width=900))
+display(pd.DataFrame(report['selected'])[['model', 'shots', 'policy', 'dev_accuracy', 'accuracy']].round(3))
+print('PNG/PDF figures, CSV tables and provenance:', report['output'])
 '''),
     ]
     # Keep measured dataset previews visible before connecting a runtime.
@@ -297,7 +311,8 @@ print('Results, classifier records and development-selected policies:', results[
         'features': 'Batched feature extraction and caching',
         'evaluation': 'Classifier selection and paired metrics',
         'pipeline': 'Run and resume experiments',
-        'exploration': 'Dataset audit and visualization'
+        'exploration': 'Dataset audit and visualization',
+        'reporting': 'Result figures, provenance and teammate export merging'
     }
     implementation = []
     for number, (name, source) in enumerate(source_blocks(), 1):

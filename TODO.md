@@ -11,7 +11,8 @@ Source: [project proposal](docs/project-proposal.pdf). Choose actual owners/revi
 - [x] Cached weights, feature chunks, classifier checkpoints and completed trial recovery.
 - [x] Full-dataset audit tables, single image, ten-class montage, cleaning/shuffling and augmentation figures.
 - [x] Accuracy, Macro-F1, class recall, confusion matrices, paired gains and compatible export merging.
-- [ ] Assign four owners and reviewers; confirm GitHub target and access.
+- [x] Create the private GitHub repository and configure the remote.
+- [ ] Assign four owners and reviewers; grant teammate access.
 - [ ] Freeze shared manifests, software, view counts, strengths and development-selection rules.
 
 ## Part A — Data and ResNet-18
@@ -37,6 +38,12 @@ Source: [project proposal](docs/project-proposal.pdf). Choose actual owners/revi
 - [ ] Decide whether optional cutout merits a separate ablation.
 
 ## Part D — DINOv2 and report integration
+
+- [x] Implement the pinned official frozen DINOv2 adapter and shared classifier path.
+- [x] Generate model-by-shot, paired augmentation-gain, class-recall and confusion-matrix figures.
+- [x] Export development-selected policies, paired trials, stage timings and software/checkpoint provenance.
+- [x] Add report validation tests for incomplete trials and development-only policy selection.
+- [x] Execute DINOv2 smoke validation: ten conditions × three shot budgets × two trials, four added views; save figures in the notebook.
 
 - [ ] Run the same full grid on DINOv2 ViT-S/14; verify pinned checkpoint identity.
 - [ ] Merge four complete compatible exports and verify paired trial completeness.

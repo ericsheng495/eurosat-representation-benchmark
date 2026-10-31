@@ -36,6 +36,7 @@ Each owner exports their completed `outputs/<experiment-id>/results.json`. Copy 
 
 ```sh
 python -m eurosat merge reports/resnet.json reports/convnext.json reports/vit.json reports/dino.json --output outputs/combined
+python -m eurosat report outputs/combined/results.json
 ```
 
 The merger rejects different data, software, shared configuration or trial manifests, missing trials, and duplicate experimental rows. Model subsets may differ. Keep original exports for provenance. Share compact reviewed figures/tables with the paper; preserve raw reports in shared storage. Confirm all four backbone assignments are present before claiming a complete comparison.

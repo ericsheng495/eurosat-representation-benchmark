@@ -103,7 +103,8 @@ def run(config, storage, scratch, target='colab_gpu'):
     summary = summarize(rows)
     output = storage / 'outputs' / experiment
     output.mkdir(parents=True, exist_ok=True)
-    write_json(output / 'results.json', {'manifest': manifest, 'trials': rows, 'summary': summary})
+    write_json(output / 'results.json', {'manifest': manifest, 'trials': rows, 'summary': summary,
+                                        'executions': [json.loads(p.read_text()) for p in sorted(directory.glob('execution-*.json'))]})
     columns = ['model', 'policy', 'shots', 'trials', 'accuracy', 'accuracy_std', 'macro_f1',
                'paired_gain_percentage_points', 'dev_accuracy']
     stream = io.StringIO()

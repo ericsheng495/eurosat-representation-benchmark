@@ -38,3 +38,9 @@ Readable-code revision: the notebook contains ten actual implementation cells, w
 ## Naming and cleanup verification
 
 The project now lives in `Desktop/eurosat-representation-benchmark` and uses `EuroSAT_Representation_Benchmark.ipynb`. The local editable installation and entry points were repaired after moving the folder. Eleven tests, dependency consistency, notebook drift checks and wheel/source builds pass. A fresh local kernel completed the renamed notebook in 11.0 seconds, including all dataset figures and cached smoke results; that verification was stored separately as `work/rename-validation.json` so the main notebook retains the user's saved Colab T4 outputs. Existing Drive cache folders remain supported. The drift-check regression test confirms a failed check never overwrites a teammate's notebook edits.
+
+## Part D implementation and rendered results
+
+On 2026-10-30, the complete notebook passed in a fresh local MPS kernel in 39.3 seconds with the official pinned frozen DINOv2 ViT-S/14 adapter. The real-image smoke subset contained 400 EuroSAT tiles; ten policies × 1/5/10 shots × two paired trials produced 60 classifier result records with four added views. Existing original embeddings were reused; new augmented embeddings were computed. Four result figures and their tables are saved inline after the six dataset figures. PNG/PDF reports, CSV tables, development-selected policies and provenance were exported to the run's report folder.
+
+Thirteen tests pass, including report arithmetic (paired gains), development-only policy selection, actual PNG/PDF output verification and incomplete-pair rejection. Notebook drift checks, dependency checks and package builds pass. These runs verify execution, not final DINOv2 research performance. Full-data/20-trial runs and four-model paper integration remain pending.

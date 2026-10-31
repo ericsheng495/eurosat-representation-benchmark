@@ -171,7 +171,7 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(len(list(root.glob('*.ipynb'))), 1)
         images = [o for c in notebook.cells for o in c.get('outputs', [])
                   if 'image/png' in o.get('data', {})]
-        self.assertEqual(len(images), 6)
+        self.assertGreaterEqual(len(images), 6)
         for cell in notebook.cells:
             if cell.cell_type == 'code':
                 compile(cell.source, 'notebook', 'exec')

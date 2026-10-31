@@ -15,7 +15,7 @@ Native RGB support images from EuroSAT (Helber et al., 2019; Copernicus Sentinel
 
 In VS Code, choose **Select Another Kernel → Colab → New Colab Server → GPU → Python 3 (ipykernel)**. The runtime must have an NVIDIA GPU; selecting Python on a TPU server does not change its hardware. The notebook checks the device before downloading data. Colab allocation and account authorization happen in your own account.
 
-Open **[EuroSAT_Representation_Benchmark.ipynb](EuroSAT_Representation_Benchmark.ipynb)** for all notebook work. It contains the actual helper code in ten labeled, readable cells and needs no GitHub credentials when uploaded to Colab. Saved dataset previews are visible before execution, followed by dataset tables, six figures, four labeled implementation parts with TODO checkboxes, and one selected execution cell. The same file works locally in VS Code with `TARGET = 'local'`.
+Open **[EuroSAT_Representation_Benchmark.ipynb](EuroSAT_Representation_Benchmark.ipynb)** for all notebook work. It contains the actual helper code in eleven labeled, readable cells and needs no GitHub credentials when uploaded to Colab. Saved dataset previews are visible before execution, followed by dataset tables, six figures, four labeled implementation parts with TODO checkboxes, and one selected execution cell. The same file works locally in VS Code with `TARGET = 'local'`.
 
 ## Local development
 
@@ -36,30 +36,62 @@ Select `.venv` as the VS Code kernel for local work and set notebook `TARGET = '
 python -m eurosat explore --output docs/figures
 python scripts/execute_notebook.py
 python -m eurosat merge outputs/model-a/results.json outputs/model-b/results.json --output outputs/combined
+python -m eurosat report outputs/combined/results.json
 ```
 
 ## Repository structure
 
+Start with the notebook to run experiments. Edit `src/eurosat/` to change reusable behavior; rebuild the notebook afterward so Colab runs the same code.
+
 ```text
-EuroSAT_Representation_Benchmark.ipynb  One notebook: dataset exploration, Parts A–D, experiments
-src/eurosat/
-  config.py, runtime.py       Presets, checkpoint identities and hardware checks
-  data.py, exploration.py     Verified data, splits, audit and figures
-  augment.py, models.py       Support transformations and four frozen adapters
-  features.py, cache.py       Chunked embeddings and atomic checkpoints
-  evaluation.py              Common classifier and paired metrics
-  pipeline.py, reporting.py   Execution and compatible teammate export merging
-  cli.py                     run / explore / merge commands
-scripts/                     Notebook generation and fresh-kernel execution
-requirements/local.txt       Local PyTorch pair and editable project installation
-tests/                       Data isolation, reproducibility and resume checks
-docs/                        Proposal, methodology, figures and team instructions
-TODO.md                      Checkoff plan with suggested four-person workstreams
+eurosat-representation-benchmark/
+├── EuroSAT_Representation_Benchmark.ipynb  Run, inspect outputs, follow Parts A–D
+├── src/eurosat/                           Reusable experiment implementation
+├── scripts/                              Build and validate the notebook
+├── tests/                                Reproducibility, leakage and recovery checks
+├── requirements/local.txt                Local environment dependencies
+├── docs/                                 Proposal, methods, figures and team guide
+├── TODO.md                               Shared checkoff plan
+└── .github/workflows/ci.yml               Automated checks on push and pull requests
 ```
+
+| To change… | Edit here | Notebook location / owner |
+|---|---|---|
+| Run mode, models, seeds and view budgets | `src/eurosat/config.py` | Sections 1 and 4; shared protocol |
+| GPU selection and device checks | `src/eurosat/runtime.py` | Section 3: hardware helpers |
+| Downloading, duplicate removal, splits and shot sampling | `src/eurosat/data.py` | Part A: shared data / ResNet |
+| Dataset audit and sample-image plots | `src/eurosat/exploration.py` | Section 5; Part A |
+| Pretrained backbone adapters | `src/eurosat/models.py` | Parts A/B/C/D: ResNet / ConvNeXt / ViT / DINOv2 |
+| Support-image transformations | `src/eurosat/augment.py` | Parts B and C |
+| Batched embeddings and interruption recovery | `src/eurosat/features.py`, `cache.py` | Shared infrastructure |
+| Logistic regression, metrics and paired summaries | `src/eurosat/evaluation.py` | Part D |
+| Merge teammate exports and generate result figures | `src/eurosat/reporting.py` | Part D; Section 8 |
+| Execution order and cache reuse | `src/eurosat/pipeline.py` | Section 7 |
+| Terminal commands | `src/eurosat/cli.py` | `python -m eurosat --help` |
+| Notebook headings, TODO cells and execution checks | `scripts/build_notebook.py`, `execute_notebook.py` | Development tooling |
+
+`data/`, `cache/`, `outputs/`, `work/` and `.venv/` are generated locally or in Drive and stay outside Git. The notebook's reviewed tables and figures stay saved for readers.
 
 The executor saves cell outputs into this same notebook; it does not create another notebook copy. Rebuilding preserves saved outputs when the code is unchanged; changed code starts with measured dataset previews.
 
 Edit reusable behavior in `src/eurosat`, and notebook narrative in `scripts/build_notebook.py`; rebuild and commit the tracked notebook. `dist/`, environments, datasets, caches and raw result exports are ignored; reviewed notebook outputs are retained. CI checks the notebook, runs unit tests and builds the package.
+
+## Part D: DINOv2 and result visualization
+
+Part D is implemented. The notebook defaults to `ASSIGNMENT = 'dinov2_vits14'`; use another assignment for Parts A–C. DINOv2 uses the official pinned ViT-S/14 checkpoint, frozen evaluation mode and the same development-tuned logistic regression as the other backbones.
+
+Section 8 shows the completed run's accuracy-by-shot plot, paired augmentation gains, class recall and normalized confusion matrix. Error bars show trial standard deviation. Every plot is labeled when it comes from smoke mode. Saved smoke outputs validate the workflow; the full-data study remains on the TODO list.
+
+```sh
+# Quick DINOv2 execution check (three default conditions).
+python -m eurosat run --mode smoke --models dinov2_vits14
+# Full Part D grid; run on the intended GPU after freezing the protocol.
+python -m eurosat run --mode full --models dinov2_vits14
+# Generate PNG/PDF figures, CSVs and provenance from a completed export.
+python -m eurosat report outputs/EXPERIMENT_ID/results.json
+```
+
+The report exports all prespecified conditions. It selects the preferred policy using development accuracy only; test accuracy never chooses the policy. Timing exports describe recorded extraction stages and classifier fits, including possible cache reuse. See [Part D implementation and interpretation](docs/part-d.md).
 
 ## Study and recovery
 

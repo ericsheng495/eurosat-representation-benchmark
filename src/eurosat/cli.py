@@ -22,7 +22,15 @@ def main(argv=None):
     merge = commands.add_parser('merge', help='Combine compatible completed teammate result exports')
     merge.add_argument('inputs', nargs='+', type=Path)
     merge.add_argument('--output', required=True, type=Path)
+    report = commands.add_parser('report', help='Render figures and tables from completed results')
+    report.add_argument('results', type=Path)
+    report.add_argument('--output', type=Path)
     args = parser.parse_args(argv)
+    if args.command == 'report':
+        import matplotlib
+        matplotlib.use('Agg')
+        from .reporting import create_report
+        return create_report(args.results, args.output)
     if args.command == 'merge':
         from .reporting import merge_results
         return merge_results(args.inputs, args.output)
