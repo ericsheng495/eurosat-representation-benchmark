@@ -13,6 +13,7 @@ from jupyter_client.kernelspec import KernelSpecManager
 
 def parse_args():
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--mode', choices=['full', 'smoke'], default='full')
     parser.add_argument('--models', default='dinov2_vits14')
     parser.add_argument('--policies')
     parser.add_argument('--trials', type=int)
@@ -49,7 +50,7 @@ def main():
                                 kernel_spec_manager=KernelSpecManager(kernel_dirs=[temporary]))
         client = NotebookClient(notebook, km=manager, timeout=7200, iopub_timeout=120,
                                 on_cell_start=on_cell_start, on_cell_executed=on_cell_executed)
-        env = dict(os.environ, EUROSAT_TARGET='local', EUROSAT_MODE='smoke',
+        env = dict(os.environ, EUROSAT_TARGET='local', EUROSAT_MODE=args.mode,
                    EUROSAT_STORAGE=str(root), EUROSAT_MODELS=args.models,
                    EUROSAT_EXPERIMENT=args.experiment or ('part-d' if args.models == 'dinov2_vits14' else 'primary'),
                    MPLBACKEND='Agg')

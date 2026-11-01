@@ -51,7 +51,7 @@ import subprocess
 from pathlib import Path
 
 TARGET = os.environ.get('EUROSAT_TARGET', 'colab_gpu')
-MODE = os.environ.get('EUROSAT_MODE', 'smoke')  # Change to full after checking the workflow.
+MODE = os.environ.get('EUROSAT_MODE', 'full')  # Full ResNet-18 + DINOv2 batch; smoke is opt-in.
 ASSIGNMENT = os.environ.get('EUROSAT_ASSIGNMENT', 'dinov2_vits14')
 EXPERIMENT = os.environ.get('EUROSAT_EXPERIMENT', 'part-d' if ASSIGNMENT == 'dinov2_vits14' else 'primary')
 SELECT_STRENGTHS = True  # Development-only selection before the primary grid.

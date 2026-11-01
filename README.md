@@ -10,8 +10,8 @@ Native RGB support images from EuroSAT (Helber et al., 2019; Copernicus Sentinel
 
 1. Open the notebook linked below; it already includes the code and saved outputs.
 2. Upload `EuroSAT_Representation_Benchmark.ipynb` to Colab and choose a **GPU** runtime.
-3. Run all cells and authorize Drive. Start with `MODE = 'smoke'` to check execution.
-4. For research runs set `MODE = 'full'`. Each teammate sets `ASSIGNMENT` to their backbone from Parts A–D.
+3. Run all cells and authorize Drive. The default `MODE = 'full'` runs the complete ResNet-18 and DINOv2 suite.
+4. Use `MODE = 'smoke'` only for a quick execution check. Each teammate can change `ASSIGNMENT` for other workstreams.
 
 In VS Code, choose **Select Another Kernel → Colab → New Colab Server → GPU → Python 3 (ipykernel)**. The runtime must have an NVIDIA GPU; selecting Python on a TPU server does not change its hardware. The notebook checks the device before downloading data. Colab allocation and account authorization happen in your own account.
 
@@ -34,7 +34,7 @@ Select `.venv` as the VS Code kernel for local work and set notebook `TARGET = '
 
 ```sh
 python -m eurosat explore --output docs/figures
-python scripts/execute_notebook.py
+python scripts/execute_notebook.py --mode full
 python -m eurosat merge outputs/model-a/results.json outputs/model-b/results.json --output outputs/combined
 python -m eurosat report outputs/combined/results.json
 ```
@@ -87,7 +87,7 @@ The proposal's baselines are explicit: matched **ResNet-18 versus DINOv2**, no a
 
 Part D includes the full proposal workflow and the matched ResNet-18 comparison baseline. The notebook defaults to `ASSIGNMENT = 'dinov2_vits14'`; use another assignment for Parts A–C. DINOv2 uses the official pinned ViT-S/14 checkpoint, frozen evaluation mode and the same development-tuned logistic regression as the other backbones.
 
-The suite selects strengths on development data, runs every four-view condition, then evaluates development-selected nine-view methods on the same 1-shot originals. Section 8 shows accuracy, Macro-F1, class effects, confusion matrices and the proposal's label/view-budget comparisons. Error bars show trial standard deviation. Every plot is labeled when it comes from smoke mode. Saved smoke outputs validate the workflow; the full-data study remains on the TODO list.
+The suite selects strengths on development data, runs every four-view condition, then evaluates development-selected nine-view methods on the same 1-shot originals. Section 8 shows accuracy, Macro-F1, class effects, confusion matrices and the proposal's label/view-budget comparisons. Error bars show trial standard deviation. Every plot is labeled when it comes from smoke mode. The saved notebook now includes the completed full-data Colab T4 run: 600 DINOv2 records, 600 matched ResNet-18 records and 80 nine-view follow-ups. ConvNeXt/ViT integration and independent report review remain on the TODO list.
 
 ```sh
 # Quick DINOv2 execution check (three default conditions).

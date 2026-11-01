@@ -54,7 +54,8 @@ Source: [project proposal](docs/project-proposal.pdf). Choose actual owners/revi
 - [x] Resumable suite runner and readable notebook execution/visualization cells.
 - [x] Meaningful tests for development selection, matched original supports and budget arithmetic.
 - [x] Execute and visualize the entire smoke suite; verify a fully cached rerun.
-- [ ] Complete full-data Part D execution and review the resulting report.
+- [x] Complete full-data Part D on Colab T4: 600 DINOv2 + 600 ResNet-18 primary records and 80 nine-view follow-ups.
+- [ ] Independently review the completed full-data report.
 - [ ] Have the team freeze/share strengths and agree on development-selection rules.
 - [ ] Merge all four compatible full-data exports after Parts A–C complete.
 - [ ] Independently review geographic/pretraining limitations and reproduce the final paper tables.
