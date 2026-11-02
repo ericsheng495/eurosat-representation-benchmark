@@ -1,4 +1,4 @@
-"""Build the single self-contained EuroSAT research notebook."""
+"""Build the self-contained frozen-representation research notebook."""
 import argparse
 import ast
 import base64
@@ -13,9 +13,9 @@ MODULE_ORDER = ['config', 'cache', 'runtime', 'augment', 'data', 'models',
                 'features', 'evaluation', 'pipeline', 'exploration', 'reporting', 'experiments']
 
 
-def source_blocks():
+def source_blocks(modules=MODULE_ORDER):
     blocks = []
-    for name in MODULE_ORDER:
+    for name in modules:
         source = (ROOT / 'src/eurosat' / f'{name}.py').read_text()
         tree = ast.parse(source)
         remove = set()
@@ -25,6 +25,53 @@ def source_blocks():
         body = ''.join(line for i, line in enumerate(source.splitlines(True), 1) if i not in remove)
         blocks.append((name, body))
     return blocks
+
+
+def compact_source_blocks(modules, selections, preimported=()):
+    """Embed selected declarations with their dependencies and one shared import cell."""
+    blocks, imports = [], {}
+    for module, source in source_blocks(modules):
+        tree = ast.parse(source)
+        declarations = {}
+        for node in tree.body:
+            names = ([node.name] if isinstance(node, (ast.FunctionDef, ast.ClassDef)) else
+                     [n.id for target in node.targets for n in ast.walk(target) if isinstance(n, ast.Name)]
+                     if isinstance(node, ast.Assign) else [])
+            declarations.update({name: node for name in names})
+        required = set(selections.get(module, declarations))
+        if required - declarations.keys():
+            raise ValueError(f'Unknown declarations in {module}: {required - declarations.keys()}')
+        while True:
+            dependencies = {n.id for name in required for n in ast.walk(declarations[name])
+                            if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Load)}
+            expanded = required | (dependencies & declarations.keys())
+            if expanded == required:
+                break
+            required = expanded
+        remove = set()
+        selected_nodes = {declarations[name] for name in required}
+        for node in tree.body:
+            if isinstance(node, (ast.Import, ast.ImportFrom)):
+                group = ('import', None) if isinstance(node, ast.Import) else ('from', node.module)
+                aliases = imports.setdefault(group, {})
+                aliases.update({(a.name, a.asname): a for a in node.names})
+            if isinstance(node, (ast.Import, ast.ImportFrom)) or node not in selected_nodes:
+                start = min([node.lineno] + [d.lineno for d in getattr(node, 'decorator_list', [])])
+                remove.update(range(start, node.end_lineno + 1))
+        body = ''.join(line for i, line in enumerate(source.splitlines(True), 1) if i not in remove).strip()
+        blocks.append((module, body))
+    used = {n.id for _, body in blocks for n in ast.walk(ast.parse(body))
+            if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Load)}
+    header = []
+    for (kind, module), aliases in imports.items():
+        names = [a for a in aliases.values() if (a.asname or a.name.split('.')[0]) in used
+                 and (a.asname or a.name.split('.')[0]) not in preimported]
+        if names:
+            if kind == 'import':
+                header.extend(ast.unparse(ast.Import(names=[a])) for a in names)
+            else:
+                header.append(ast.unparse(ast.ImportFrom(module=module, names=names, level=0)))
+    return [('imports', '\n'.join(header)), *blocks]
 
 
 def portable_source():

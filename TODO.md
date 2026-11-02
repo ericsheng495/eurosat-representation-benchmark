@@ -62,7 +62,12 @@ Source: [project proposal](docs/project-proposal.pdf). Choose actual owners/revi
 
 ## Optional separate extensions
 
-- [ ] Add fine-tuning only under a separately declared protocol and budget.
+- [x] Add a separate fine-tuning notebook, matched neural-head control and epoch-resumable checkpoints.
+- [x] Select DINOv2 final-block adaptation and map the extension to proposal pages 3–5.
+- [x] Implement matched frozen/adapted × none/repeat/flip comparisons and the optional two-block ablation.
+- [x] Run all 18 DINOv2 smoke fits and save comparison, learning-curve and class-error figures.
+- [ ] Lock development-selected optimizer settings, run the 360-fit full extension and review it separately.
+- [ ] Report exploratory scope, extra development labels and negative or inconsistent fine-tuning gains.
 - [ ] Add ridge/Euclidean/cosine heads only if the team agrees an additional ablation is useful.
 
 Do not add the original six-base/four-novel split or three-epoch training to the default frozen-backbone benchmark. See [migration coverage](docs/migration.md).

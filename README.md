@@ -15,7 +15,7 @@ Native RGB support images from EuroSAT (Helber et al., 2019; Copernicus Sentinel
 
 In VS Code, choose **Select Another Kernel → Colab → New Colab Server → GPU → Python 3 (ipykernel)**. The runtime must have an NVIDIA GPU; selecting Python on a TPU server does not change its hardware. The notebook checks the device before downloading data. Colab allocation and account authorization happen in your own account.
 
-Open **[EuroSAT_Representation_Benchmark.ipynb](EuroSAT_Representation_Benchmark.ipynb)** for all notebook work. It contains the actual helper code in twelve labeled, readable cells and needs no GitHub credentials when uploaded to Colab. Saved dataset previews are visible before execution, followed by dataset tables, six figures, four labeled implementation parts with TODO checkboxes, and one selected execution cell. The same file works locally in VS Code with `TARGET = 'local'`.
+Open **[EuroSAT_Representation_Benchmark.ipynb](EuroSAT_Representation_Benchmark.ipynb)** for the primary frozen-representation study. The separate **[EuroSAT_Fine_Tuning.ipynb](EuroSAT_Fine_Tuning.ipynb)** implements the optional adaptation study. The primary notebook contains the actual helper code in twelve labeled, readable cells and needs no GitHub credentials when uploaded to Colab. Saved dataset previews are visible before execution, followed by dataset tables, six figures, four labeled implementation parts with TODO checkboxes, and one selected execution cell. The same file works locally in VS Code with `TARGET = 'local'`.
 
 ## Local development
 
@@ -45,7 +45,8 @@ Start with the notebook to run experiments. Edit `src/eurosat/` to change reusab
 
 ```text
 eurosat-representation-benchmark/
-├── EuroSAT_Representation_Benchmark.ipynb  Run, inspect outputs, follow Parts A–D
+├── EuroSAT_Representation_Benchmark.ipynb  Primary frozen-backbone study and Parts A–D
+├── EuroSAT_Fine_Tuning.ipynb               DINOv2 partial adaptation and matched controls
 ├── src/eurosat/                           Reusable experiment implementation
 ├── scripts/                              Build and validate the notebook
 ├── tests/                                Reproducibility, leakage and recovery checks
@@ -76,6 +77,21 @@ eurosat-representation-benchmark/
 The executor saves cell outputs into this same notebook; it does not create another notebook copy. Rebuilding preserves saved outputs when the code is unchanged; changed code starts with measured dataset previews.
 
 Edit reusable behavior in `src/eurosat`, and notebook narrative in `scripts/build_notebook.py`; rebuild and commit the tracked notebook. `dist/`, environments, datasets, caches and raw result exports are ignored; reviewed notebook outputs are retained. CI checks the notebook, runs unit tests and builds the package.
+
+## Optional fine-tuning notebook
+
+[EuroSAT_Fine_Tuning.ipynb](EuroSAT_Fine_Tuning.ipynb) implements **DINOv2 partial fine-tuning**, an optional extension explicitly allowed on page 4 of the proposal. The chosen direction trains only the final Transformer block, final normalization and new classification head; `LAST_BLOCKS = 2` enables a separate sensitivity study. Full-backbone training is disabled.
+
+The study asks whether representation adaptation helps more than augmentation alone. It crosses frozen versus adapted DINOv2 with **none / repeated originals / flips**, preserving shared partitions and nested 1/5/10-shot supports. Results include paired adaptation/augmentation gains, real-label comparisons, accuracy, Macro-F1 and learning curves. The neural-head control is separate from the primary logistic-regression baseline.
+
+The notebook defaults to `MODE = 'smoke'` (18 fits). `MODE = 'full'` expands the dataset/trial budget to 360 fits while keeping training partial. Checkpoints persist under `cache/finetuning/`; exports use `outputs/finetuning/`. The primary benchmark's saved full Colab results are preserved.
+
+```sh
+python scripts/build_finetuning_notebook.py
+python scripts/execute_notebook.py --notebook EuroSAT_Fine_Tuning.ipynb --mode smoke --models dinov2_vits14
+```
+
+Edit `src/eurosat/finetuning.py` for training and `src/eurosat/finetuning_reporting.py` for shared tables and plots. The Colab notebook embeds only the needed helpers with consolidated imports; edit the source modules and regenerate it instead of maintaining duplicate implementations. Changes to shared helpers require rebuilding both notebooks. See [fine-tuning protocol](docs/fine-tuning.md) for training scopes, checkpoints and interpretation.
 
 ## Metrics and baselines
 

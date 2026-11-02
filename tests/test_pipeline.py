@@ -190,7 +190,8 @@ class PipelineTests(unittest.TestCase):
             exec(cell.source, namespace)
         self.assertTrue(callable(namespace['explore']))
         self.assertEqual(namespace['Config']().models, ['resnet18'])
-        self.assertEqual(len(list(root.glob('*.ipynb'))), 1)
+        self.assertEqual({p.name for p in root.glob('*.ipynb')},
+                         {'EuroSAT_Representation_Benchmark.ipynb', 'EuroSAT_Fine_Tuning.ipynb'})
         images = [o for c in notebook.cells for o in c.get('outputs', [])
                   if 'image/png' in o.get('data', {})]
         self.assertGreaterEqual(len(images), 6)
