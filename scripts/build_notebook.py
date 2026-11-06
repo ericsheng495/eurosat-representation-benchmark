@@ -100,7 +100,8 @@ from pathlib import Path
 TARGET = os.environ.get('EUROSAT_TARGET', 'colab_gpu')
 MODE = os.environ.get('EUROSAT_MODE', 'full')  # Full ResNet-18 + DINOv2 batch; smoke is opt-in.
 ASSIGNMENT = os.environ.get('EUROSAT_ASSIGNMENT', 'dinov2_vits14')
-EXPERIMENT = os.environ.get('EUROSAT_EXPERIMENT', 'part-d' if ASSIGNMENT == 'dinov2_vits14' else 'primary')
+SUITES = {'dinov2_vits14': 'part-d', 'vit_b_16': 'part-c'}
+EXPERIMENT = os.environ.get('EUROSAT_EXPERIMENT', SUITES.get(ASSIGNMENT, 'primary'))
 SELECT_STRENGTHS = True  # Development-only selection before the primary grid.
 INCLUDE_CUTOUT = False  # Optional proposal comparison.
 INCLUDE_RESNET_BASELINE = True  # Proposal's conventional CNN baseline, matched protocol.
@@ -160,7 +161,12 @@ All ten land-use classes are retained. Decoded-RGB duplicates are checked before
 
 Frozen backbones: ResNet-18, ConvNeXt-Tiny, ViT-B/16 and DINOv2 ViT-S/14. A shared multinomial logistic-regression procedure operates on L2-normalized embeddings. Development accuracy selects C and the preferred augmentation; test labels never select settings. The full preset uses 20 paired trials and original-plus-four-view conditions. See `docs/methodology.md` for strengths, checkpoint identities and interpretation limits.
 '''),
-        code('''config = part_d_config(MODE, INCLUDE_CUTOUT) if EXPERIMENT == 'part-d' else (Config.full() if MODE == 'full' else Config())
+        code('''if EXPERIMENT == 'part-d':
+    config = part_d_config(MODE, INCLUDE_CUTOUT)
+elif EXPERIMENT == 'part-c':
+    config = part_c_config(MODE, INCLUDE_CUTOUT)
+else:
+    config = Config.full() if MODE == 'full' else Config()
 if ASSIGNMENT != 'all':
     config.models = [ASSIGNMENT]
 for field in ['models', 'policies']:
@@ -273,8 +279,10 @@ Implementation: [`models.py`](src/eurosat/models.py), [`augment.py`](src/eurosat
         code('''# Part C implementation TODO: color/noise/blur/erasing policies belong in augment.py;
 # ViT representation extraction belongs in models.py. Keep original shot budgets unchanged.
 # Set ASSIGNMENT = 'vit_b_16' in section 1 to execute this model only.
-part_c_config = replace(config, models=['vit_b_16'])
-print('Part C:', part_c_config.models)
+# Part C reuses Part D's LOCKED_STRENGTHS. Optional development-only strength review:
+# review_part_c_strengths(STORAGE, SCRATCH, target=TARGET, mode=MODE)
+part_c_preview = replace(config, models=['vit_b_16'])
+print('Part C:', part_c_preview.models)
 '''),
         md('''### Part D — DINOv2, statistical summaries and report integration
 
@@ -311,6 +319,11 @@ Only support images receive random augmentation. Development and test preprocess
                        select_strengths=SELECT_STRENGTHS, include_cutout=INCLUDE_CUTOUT,
                        selected_methods=NINE_VIEW_METHODS, include_resnet=INCLUDE_RESNET_BASELINE)
     results = suite['combined'] or suite['primary']
+elif EXPERIMENT == 'part-c':
+    suite = run_part_c(STORAGE, SCRATCH, target=TARGET, mode=MODE, config=config,
+                       include_cutout=INCLUDE_CUTOUT, selected_methods=NINE_VIEW_METHODS,
+                       include_resnet=INCLUDE_RESNET_BASELINE)
+    results = suite['combined'] or suite['primary']
 else:
     suite = None
     results = run(config, STORAGE, SCRATCH, target=TARGET)
@@ -330,9 +343,9 @@ display(table[intervals].round(3))
 print('95% intervals bootstrap support trials conditional on fixed queries; unavailable below 5 trials.')
 print('Results, classifier records and development-selected policies:', results['output'])
 '''),
-        md('''### Part D: visualize metrics and proposal baselines
+        md('''### Parts C and D: visualize metrics and proposal baselines
 
-The Part D suite uses 1-shot development labels to lock strengths, runs the primary grid, selects nine-view methods on primary development accuracy, and then evaluates the follow-up. These figures use the selected run above. The ResNet-18 baseline uses identical partitions, supports, strengths and classifier rules. No-augmentation and repeated-original controls are retained. The baseline plots use the unaugmented condition; augmentation gains pair each trial with the same original support/query images. Error bars show trial standard deviation, not a confidence interval. Policies are selected from development accuracy only. Smoke figures check execution and are not paper results.
+The Part D suite uses 1-shot development labels to lock strengths, and Part C reuses those values. Each suite runs the primary grid, selects nine-view methods on primary development accuracy, and then evaluates the follow-up. These figures use the selected run above. The ResNet-18 baseline uses identical partitions, supports, strengths and classifier rules. No-augmentation and repeated-original controls are retained. The baseline plots use the unaugmented condition; augmentation gains pair each trial with the same original support/query images. Error bars show trial standard deviation, not a confidence interval. Policies are selected from development accuracy only. Smoke figures check execution and are not paper results.
 '''),
         code('''report = (suite['comparison_report'] or suite['primary_report']) if suite is not None else create_report(Path(results['output']) / 'results.json')
 for name, filename in report['figures'].items():
@@ -391,7 +404,7 @@ display(classification[(classification.policy == 'none') & (classification.shots
         'pipeline': 'Run and resume experiments',
         'exploration': 'Dataset audit and visualization',
         'reporting': 'Result figures, provenance and teammate export merging',
-        'experiments': 'Complete proposal-aligned Part D experiment suite'
+        'experiments': 'Complete proposal-aligned Part C and Part D experiment suites'
     }
     implementation = []
     for number, (name, source) in enumerate(source_blocks(), 1):

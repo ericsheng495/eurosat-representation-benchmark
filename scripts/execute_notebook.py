@@ -18,7 +18,7 @@ def parse_args():
     parser.add_argument('--policies')
     parser.add_argument('--trials', type=int)
     parser.add_argument('--views', type=int)
-    parser.add_argument('--experiment', choices=['primary', 'part-d'])
+    parser.add_argument('--experiment', choices=['primary', 'part-c', 'part-d'])
     parser.add_argument('--notebook', type=Path, help='Defaults to the generated self-contained Colab notebook')
     parser.add_argument('--output', type=Path, help='Save outputs here; defaults to the input notebook')
     return parser.parse_args()
@@ -58,7 +58,7 @@ def main():
         env = dict(os.environ, EUROSAT_TARGET='local', EUROSAT_MODE=mode,
                    EUROSAT_STORAGE=str(root), EUROSAT_MODELS=models,
                    EUROSAT_FINETUNE_MODE=mode, EUROSAT_FINETUNE_MODEL=models,
-                   EUROSAT_EXPERIMENT=args.experiment or ('part-d' if models == 'dinov2_vits14' else 'primary'),
+                   EUROSAT_EXPERIMENT=args.experiment or {'dinov2_vits14': 'part-d', 'vit_b_16': 'part-c'}.get(models, 'primary'),
                    MPLBACKEND='Agg')
         for field in ['policies', 'trials', 'views']:
             value = getattr(args, field)

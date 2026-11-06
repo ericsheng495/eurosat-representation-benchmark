@@ -32,7 +32,18 @@ def main(argv=None):
     suite.add_argument('--include-cutout', action='store_true')
     suite.add_argument('--skip-resnet-baseline', action='store_true')
     suite.add_argument('--selected-methods', type=int, default=2)
+    vit_suite = commands.add_parser('part-c', help='Run the proposal-aligned ViT-B/16 experiment suite')
+    vit_suite.add_argument('--mode', choices=['smoke', 'full'], default='full')
+    vit_suite.add_argument('--storage', type=Path, default=Path.cwd())
+    vit_suite.add_argument('--include-cutout', action='store_true')
+    vit_suite.add_argument('--skip-resnet-baseline', action='store_true')
+    vit_suite.add_argument('--selected-methods', type=int, default=2)
     args = parser.parse_args(argv)
+    if args.command == 'part-c':
+        from .experiments import run_part_c
+        return run_part_c(args.storage, args.storage / 'data/extracted', target='local', mode=args.mode,
+                          include_cutout=args.include_cutout, selected_methods=args.selected_methods,
+                          include_resnet=not args.skip_resnet_baseline)
     if args.command == 'part-d':
         from .experiments import run_part_d
         return run_part_d(args.storage, args.storage / 'data/extracted', target='local',

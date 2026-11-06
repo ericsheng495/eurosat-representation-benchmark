@@ -1,4 +1,4 @@
-"""Proposal-aligned Part D: development selection, main grid and view-budget study."""
+"""Proposal-aligned Parts C and D: development selection, main grid and view-budget study."""
 from dataclasses import asdict, replace
 import json
 from pathlib import Path
@@ -23,6 +23,23 @@ def part_d_config(mode='full', include_cutout=False):
         raise ValueError('mode must be full or smoke')
     config = Config.full() if mode == 'full' else Config(trials=2, views=4, policies=POLICIES.copy())
     config.models = ['dinov2_vits14']
+    if include_cutout:
+        config.policies.append('cutout')
+    config.validate()
+    return config
+
+
+LOCKED_STRENGTHS = {'flip': 1.0, 'rotation': 1.5, 'translation': 1.5, 'scale': .5,
+                    'brightness_contrast': .5, 'noise': .5, 'blur': 1.5, 'erasing': .5}
+
+
+def part_c_config(mode='full', include_cutout=False):
+    """The primary ViT-B/16 grid, reusing the strengths locked by Part D."""
+    if mode not in {'full', 'smoke'}:
+        raise ValueError('mode must be full or smoke')
+    config = Config.full() if mode == 'full' else Config(trials=2, views=4, policies=POLICIES.copy())
+    config.models = ['vit_b_16']
+    config.policy_strengths = dict(LOCKED_STRENGTHS)
     if include_cutout:
         config.policies.append('cutout')
     config.validate()
@@ -170,4 +187,69 @@ def run_part_d(storage, scratch, target='colab_gpu', mode='full', *,
               'seconds_this_execution': time.perf_counter() - started}
     write_json(directory / 'suite.json', result)
     print('Part D suite complete:', directory, flush=True)
+    return result
+
+
+def review_part_c_strengths(storage, scratch, target='colab_gpu', mode='full'):
+    """Report which color/pixel strengths ViT would pick; the locked values stay in force."""
+    config = replace(part_c_config(mode), policies=['none', 'brightness_contrast', 'noise', 'blur', 'erasing'])
+    tuning = tune_strengths(config, storage, scratch, target)
+    review = {policy: {'vit_selected': strength, 'locked': LOCKED_STRENGTHS[policy]}
+              for policy, strength in tuning['selected_strengths'].items()}
+    path = Path(tuning['output']) / 'part-c-strength-review.json'
+    write_json(path, {'review': review, 'locked_strengths_unchanged': True,
+                      'query_labels_used': tuning['query_labels_used']})
+    print('Part C strength review (locked values unchanged):', path, flush=True)
+    return {'review': review, 'output': str(path)}
+
+
+def run_part_c(storage, scratch, target='colab_gpu', mode='full', *,
+               include_cutout=False, selected_methods=2, config=None, include_resnet=True):
+    """Run and resume the ViT-B/16 comparisons with the same steps as Part D, minus strength selection."""
+    if selected_methods < 1:
+        raise ValueError('Select at least one nine-view method')
+    config = config or part_c_config(mode, include_cutout)
+    config.validate()
+    if config.models != ['vit_b_16'] or config.views != 4 or set(config.shots) != {1, 5, 10} or not set(POLICIES) <= set(config.policies):
+        raise ValueError('Part C primary grid needs ViT-B/16, all ten conditions, 1/5/10 shots and four views')
+    if config.policy_strengths != LOCKED_STRENGTHS:
+        raise ValueError('Part C must reuse the strengths locked by Part D')
+    mode = config.mode
+    storage = prepare_storage(storage)
+    _, _, _, dataset_id = prepare_data(storage, scratch, config)
+    suite_id = key({'suite': 'part-c-v1', 'dataset': dataset_id, 'config': asdict(config),
+                    'include_resnet_baseline': include_resnet, 'selected_methods': selected_methods,
+                    'versions': environment()})
+    directory = storage / 'outputs/part-c' / suite_id
+    directory.mkdir(parents=True, exist_ok=True)
+    plan = {'mode': mode, 'primary': asdict(config), 'include_resnet_baseline': include_resnet,
+            'strength_source': 'Part D development selection on DINOv2',
+            'nine_view_method_selection': '1-shot primary development accuracy; name tie-break',
+            'selected_methods': selected_methods, 'dataset': dataset_id}
+    write_json(directory / 'plan.json', plan)
+    started = time.perf_counter()
+    primary = run(config, storage, scratch, target)
+    primary_file = Path(primary['output']) / 'results.json'
+    primary_report = create_report(primary_file)
+    resnet, combined, comparison_report = None, None, None
+    if include_resnet:
+        # The same ResNet-18 experiment as Part D: identical config, so completed results are reused.
+        resnet = run(replace(config, models=['resnet18']), storage, scratch, target)
+        combined = merge_results([primary_file, Path(resnet['output']) / 'results.json'], directory / 'model-baseline')
+        comparison_report = create_report(Path(combined['output']) / 'results.json')
+    methods = select_nine_view_methods(primary, selected_methods)
+    # This artifact is written before evaluating any nine-view query predictions.
+    write_json(directory / 'nine-view-selection.json', {'policies': methods, 'selected_using': 'development accuracy'})
+    followup = replace(config, shots=[1], policies=['none', 'repeat', *methods], views=9)
+    nine = run(followup, storage, scratch, target)
+    nine_file = Path(nine['output']) / 'results.json'
+    nine_report = create_report(nine_file)
+    comparisons = compare_budgets(primary_file, nine_file, directory / 'comparisons')
+    result = {'mode': mode, 'output': str(directory), 'primary': primary, 'nine_view': nine,
+              'primary_report': primary_report, 'nine_view_report': nine_report,
+              'resnet_baseline': resnet, 'combined': combined, 'comparison_report': comparison_report,
+              'comparisons': comparisons, 'selected_methods': methods,
+              'seconds_this_execution': time.perf_counter() - started}
+    write_json(directory / 'suite.json', result)
+    print('Part C suite complete:', directory, flush=True)
     return result

@@ -64,6 +64,67 @@ class ExperimentTests(unittest.TestCase):
         self.assertEqual(dino, resnet)
         self.assertEqual(dino['policy_strengths'], {'rotation': .5})
 
+    def test_part_c_reuses_locked_strengths_without_selecting_them(self):
+        configurations = []
+        def recorded(config, *args):
+            configurations.append(config)
+            return {'output': str(self.root / (config.models[0] + str(config.views))),
+                    'summary': [{'shots': 1, 'policy': 'flip', 'dev_accuracy': .7}]}
+        with patch.object(experiments, 'prepare_data', return_value=(None, [], {}, 'same-data')), \
+                patch.object(experiments, 'tune_strengths') as tune, \
+                patch.object(experiments, 'run', side_effect=recorded), \
+                patch.object(experiments, 'create_report', return_value={'figures': {}, 'output': 'synthetic'}), \
+                patch.object(experiments, 'merge_results', return_value={'output': str(self.root / 'combined')}), \
+                patch.object(experiments, 'compare_budgets', return_value={}):
+            result = experiments.run_part_c(self.root, self.root, 'local', mode='smoke')
+        tune.assert_not_called()
+        self.assertEqual([c.models for c in configurations], [['vit_b_16'], ['resnet18'], ['vit_b_16']])
+        vit, resnet = asdict(configurations[0]), asdict(configurations[1])
+        vit.pop('models'); resnet.pop('models')
+        self.assertEqual(vit, resnet)
+        self.assertEqual(vit['policy_strengths'], experiments.LOCKED_STRENGTHS)
+        self.assertEqual((configurations[2].shots, configurations[2].views), ([1], 9))
+        self.assertEqual(Path(result['output']).parent.name, 'part-c')
+
+    def test_part_c_and_part_d_stay_separate(self):
+        vit, dino = experiments.part_c_config('smoke'), experiments.part_d_config('smoke')
+        with patch.object(experiments, 'prepare_data', side_effect=AssertionError('checked before data')):
+            with self.assertRaisesRegex(ValueError, 'Part D primary grid'):
+                experiments.run_part_d(self.root, self.root, 'local', config=vit)
+            with self.assertRaisesRegex(ValueError, 'Part C primary grid'):
+                experiments.run_part_c(self.root, self.root, 'local', config=dino)
+            with self.assertRaisesRegex(ValueError, 'strengths locked by Part D'):
+                experiments.run_part_c(self.root, self.root, 'local', config=replace(vit, policy_strengths={}))
+
+    def test_part_c_strength_review_keeps_the_locked_values(self):
+        locked = dict(experiments.LOCKED_STRENGTHS)
+        selected = {'brightness_contrast': 1., 'noise': 1.5, 'blur': .5, 'erasing': 1.}
+        with patch.object(experiments, 'tune_strengths',
+                          return_value={'selected_strengths': selected, 'scores': [], 'query_labels_used': 0,
+                                        'output': str(self.root / 'development')}) as tune:
+            result = experiments.review_part_c_strengths(self.root, self.root, 'local', mode='smoke')
+        self.assertEqual(tune.call_args.args[0].models, ['vit_b_16'])
+        self.assertEqual(result['review']['noise'], {'vit_selected': 1.5, 'locked': .5})
+        self.assertEqual(experiments.LOCKED_STRENGTHS, locked)
+        self.assertTrue((self.root / 'development/part-c-strength-review.json').exists())
+
+    def test_vit_adapter_returns_frozen_768_dimensional_class_tokens(self):
+        from torchvision import models as tv
+        from eurosat.models import load_backbone
+        with patch.object(tv, 'vit_b_16', lambda weights: tv.VisionTransformer(
+                image_size=224, patch_size=16, num_layers=1, num_heads=12, hidden_dim=768, mlp_dim=3072)):
+            model = load_backbone('vit_b_16', torch.device('cpu'))
+        self.assertIsInstance(model.heads, torch.nn.Identity)
+        self.assertFalse(model.training)
+        self.assertFalse(any(p.requires_grad for p in model.parameters()))
+        images = torch.zeros(2, 3, 224, 224)
+        with torch.inference_mode():
+            output = model(images)
+            tokens = model.encoder(torch.cat([model.class_token.expand(2, -1, -1), model._process_input(images)], dim=1))
+        self.assertEqual(tuple(output.shape), (2, 768))
+        self.assertEqual(tuple(tokens.shape), (2, 197, 768))
+        self.assertTrue(torch.equal(output, tokens[:, 0]))
+
     def test_nine_view_method_selection_ignores_test_scores(self):
         primary = {'summary': [
             {'shots': 1, 'policy': 'flip', 'dev_accuracy': .8, 'accuracy': .1},

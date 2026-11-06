@@ -255,7 +255,8 @@ def compare_budgets(primary_file, nine_file, output):
     summary = summary.merge(intervals.unstack().reset_index(), on=['comparison', 'model', 'policy'])
     atomic(output / 'budget-summary.csv', lambda p: summary.to_csv(p, index=False))
     smoke = first['config']['mode'] == 'smoke'
-    label = 'SMOKE CHECK — execution validation' if smoke else 'DINOv2 view-budget comparisons'
+    backbones = ' / '.join({'dinov2_vits14': 'DINOv2', 'vit_b_16': 'ViT-B/16'}.get(m, m) for m in first['config']['models'])
+    label = 'SMOKE CHECK — execution validation' if smoke else backbones + ' view-budget comparisons'
     kinds = [('one_plus_four_vs_five_originals', '1 original + 4 views versus 5 originals'),
              ('one_plus_nine_vs_ten_originals', '1 original + 9 views versus 10 originals'),
              ('nine_vs_four_views', '9 versus 4 added views at 1-shot')]
