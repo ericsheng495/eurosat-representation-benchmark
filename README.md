@@ -82,6 +82,8 @@ Edit reusable behavior in `src/eurosat`, and notebook narrative in `scripts/buil
 
 [EuroSAT_Fine_Tuning.ipynb](EuroSAT_Fine_Tuning.ipynb) implements **DINOv2 partial fine-tuning**, an optional extension explicitly allowed on page 4 of the proposal. The chosen direction trains only the final Transformer block, final normalization and new classification head; `LAST_BLOCKS = 2` enables a separate sensitivity study. Full-backbone training is disabled.
 
+See [docs/part-b.md](docs/part-b.md) for the proposal-aligned ConvNeXt-Tiny Part B benchmark, including the geometric-augmentation protocol and the paired-effect calculations for each support/query comparison.
+
 The study asks whether representation adaptation helps more than augmentation alone. It crosses frozen versus adapted DINOv2 with **none / repeated originals / flips**, preserving shared partitions and nested 1/5/10-shot supports. Results include paired adaptation/augmentation gains, real-label comparisons, accuracy, Macro-F1 and learning curves. The neural-head control is separate from the primary logistic-regression baseline.
 
 The notebook defaults to `MODE = 'smoke'` (18 fits). `MODE = 'full'` expands the dataset/trial budget to 360 fits while keeping training partial. Checkpoints persist under `cache/finetuning/`; exports use `outputs/finetuning/`. The primary benchmark's saved full Colab results are preserved.
