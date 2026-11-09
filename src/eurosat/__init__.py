@@ -1,4 +1,4 @@
-"""Frozen representations for low-data land-use classification."""
+"""Shared implementation for the EuroSAT representation benchmark."""
 from .config import Config
 from .pipeline import run
 

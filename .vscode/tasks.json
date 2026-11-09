@@ -3,15 +3,21 @@
   "tasks": [
     {
       "label": "EuroSAT: Local smoke check",
-      "type": "process", "command": "${workspaceFolder}/.venv/bin/python",
-      "args": ["-m", "eurosat", "run"], "options": {"cwd": "${workspaceFolder}"},
-      "group": {"kind": "build", "isDefault": true}, "problemMatcher": []
-    },
-    {
-      "label": "EuroSAT: Tests",
-      "type": "process", "command": "${workspaceFolder}/.venv/bin/python",
-      "args": ["-m", "unittest", "discover", "-s", "tests", "-v"],
-      "options": {"cwd": "${workspaceFolder}"}, "group": "test", "problemMatcher": []
+      "type": "process",
+      "command": "${workspaceFolder}/.venv/bin/python",
+      "args": [
+        "-m",
+        "eurosat",
+        "run"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": []
     }
   ]
 }

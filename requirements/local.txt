@@ -1,4 +1,4 @@
 # Exact Torch/Torchvision pair verified on this Mac. Colab retains its CUDA build.
 torch==2.8.0
 torchvision==0.23.0
--e .[dev]
+-e .[notebook]

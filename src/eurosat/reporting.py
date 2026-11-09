@@ -1,66 +1,22 @@
-"""Combine compatible teammate exports without mixing experimental protocols."""
-from copy import deepcopy
-import csv
-import io
+"""Render saved benchmark metrics, individual models and paired comparisons."""
 import json
 from pathlib import Path
 
-from .cache import atomic, digest_file, key, write_json
+from .cache import atomic, digest_file, write_json
 from .config import CLASSES, MODEL_IDS
 from .evaluation import complete_metrics, summarize, trial_interval
-from .exploration import STYLE, save_figure
 
 
-def comparison_identity(manifest):
-    comparable = deepcopy(manifest)
-    comparable['config'].pop('models')
-    comparable.pop('checkpoints')
-    return key(comparable)
+STYLE = {'font.family': 'DejaVu Sans', 'font.size': 9, 'axes.titlesize': 9,
+         'axes.labelsize': 9, 'axes.spines.top': False, 'axes.spines.right': False,
+         'pdf.fonttype': 42, 'ps.fonttype': 42, 'savefig.facecolor': 'white'}
 
 
-def merge_results(inputs, output):
-    """Merge completed model assignments with identical data, trials and settings."""
-    if not inputs:
-        raise ValueError('Supply at least one results.json export')
-    reports = [json.loads(Path(path).read_text()) for path in inputs]
-    identity = comparison_identity(reports[0]['manifest'])
-    rows, seen, checkpoints = [], set(), {}
-    for report in reports:
-        manifest = report['manifest']
-        if comparison_identity(manifest) != identity:
-            raise ValueError('Cannot combine different datasets, trials, software versions or non-model settings')
-        config = manifest['config']
-        if set(manifest['checkpoints']) != set(config['models']):
-            raise ValueError('Checkpoint identities must cover exactly the exported models')
-        expected = {(model, policy, shot, trial) for model in config['models']
-                    for policy in config['policies'] for shot in config['shots']
-                    for trial in range(config['trials'])}
-        received = [(r['model'], r['policy'], r['shots'], r['trial']) for r in report['trials']]
-        if len(received) != len(expected) or set(received) != expected:
-            raise ValueError('A teammate export contains incomplete or duplicated trials')
-        if seen & set(received):
-            raise ValueError('The same model/policy/shot/trial appears in multiple exports')
-        for model, checkpoint in manifest['checkpoints'].items():
-            if MODEL_IDS.get(model) != checkpoint:
-                raise ValueError('Unrecognized checkpoint identity for ' + model)
-        checkpoints.update(manifest['checkpoints'])
-        seen.update(received)
-        rows.extend(report['trials'])
-    manifest = deepcopy(reports[0]['manifest'])
-    manifest['config']['models'] = [m for m in MODEL_IDS if m in checkpoints]
-    manifest['checkpoints'] = checkpoints
-    summary = summarize(rows)
-    output = Path(output)
-    output.mkdir(parents=True, exist_ok=True)
-    write_json(output / 'results.json', {'manifest': manifest, 'trials': rows, 'summary': summary,
-                                            'executions': [entry for report in reports for entry in report.get('executions', [])]})
-    stream = io.StringIO()
-    writer = csv.DictWriter(stream, lineterminator='\n', fieldnames=list(summary[0]))
-    writer.writeheader()
-    writer.writerows(summary)
-    atomic(output / 'summary.csv', lambda p: p.write_text(stream.getvalue()))
-    print(f'Merged {len(rows)} trials across {len(checkpoints)} models into {output}', flush=True)
-    return {'output': str(output), 'summary': summary, 'models': manifest['config']['models']}
+def save_figure(figure, output, name):
+    import matplotlib.pyplot as plt
+    for extension in ['png', 'pdf']:
+        figure.savefig(Path(output) / f'{name}.{extension}', dpi=300, bbox_inches='tight', pad_inches=.04)
+    plt.close(figure)
 
 
 def create_report(results, output=None):
@@ -74,6 +30,7 @@ def create_report(results, output=None):
     report = json.loads(source.read_text())
     manifest, rows = report['manifest'], [complete_metrics(r) for r in report['trials']]
     config = manifest['config']
+    classes = manifest.get('classes', CLASSES)
     if not rows:
         raise ValueError('Report needs completed trials')
     expected = {(m, p, k, t) for m in config['models'] for p in config['policies']
@@ -120,15 +77,17 @@ def create_report(results, output=None):
     label = 'SMOKE CHECK — execution validation' if smoke else 'Frozen representations'
     names = ['model_by_shot', 'augmentation_gains', 'class_recall', 'confusion_matrix']
     with plt.rc_context(STYLE):
-        fig, ax = plt.subplots(figsize=(6.4, 3.6), layout='constrained')
-        for model in config['models']:
-            group = frame[(frame.model == model) & (frame.policy == 'none')]
-            stats = group.groupby('shots').accuracy.agg(['mean', lambda s: np.std(s, ddof=0)])
-            ax.errorbar(stats.index, stats['mean'] * 100, yerr=stats.iloc[:, 1] * 100,
-                        marker='o', capsize=3, label=model)
-        ax.set(xlabel='Original labeled images per class', ylabel='Held-out accuracy (%)',
-               ylim=(0, 100), xticks=sorted(config['shots']), title=label + '\nUnaugmented baseline; mean ± trial SD')
-        ax.legend(frameon=False)
+        fig, axes = plt.subplots(1, 2, figsize=(10, 3.6), layout='constrained')
+        for ax, metric, title in zip(axes, ['accuracy', 'macro_f1'], ['Accuracy (%)', 'Macro-F1 (%)']):
+            for model in config['models']:
+                group = frame[(frame.model == model) & (frame.policy == 'none')]
+                stats = group.groupby('shots')[metric].agg(['mean', lambda s: np.std(s, ddof=0)])
+                ax.errorbar(stats.index, stats['mean'] * 100, yerr=stats.iloc[:, 1] * 100,
+                            marker='o', capsize=3, label=model)
+            ax.set(xlabel='Original labeled images per class', ylabel=title,
+                   ylim=(0, 100), xticks=sorted(config['shots']))
+        axes[0].legend(frameon=False)
+        fig.suptitle(label + '\nUnaugmented baselines; mean ± trial SD')
         save_figure(fig, output, names[0])
 
         fig, axes = plt.subplots(len(config['models']), len(config['shots']),
@@ -151,13 +110,13 @@ def create_report(results, output=None):
         highest = max(config['shots'])
         fig, ax = plt.subplots(figsize=(8, 4.2), layout='constrained')
         width = .8 / len(config['models'])
-        positions = np.arange(len(CLASSES))
+        positions = np.arange(len(classes))
         for index, model in enumerate(config['models']):
             values = np.array([r['test']['class_recall'] for r in rows
                                if r['model'] == model and r['shots'] == highest and r['policy'] == 'none'])
             ax.bar(positions + (index - (len(config['models']) - 1) / 2) * width,
                    values.mean(0) * 100, yerr=values.std(0) * 100, width=width, label=model, capsize=2)
-        ax.set(xticks=positions, xticklabels=CLASSES, ylabel='Held-out recall (%)', ylim=(0, 100),
+        ax.set(xticks=positions, xticklabels=classes, ylabel='Held-out recall (%)', ylim=(0, 100),
                title=f'{label}\n{highest}-shot unaugmented baseline; mean ± trial SD')
         ax.tick_params(axis='x', labelrotation=45)
         for tick in ax.get_xticklabels():
@@ -172,7 +131,7 @@ def create_report(results, output=None):
                              if r['model'] == model and r['shots'] == highest and r['policy'] == 'none'], axis=0)
             normalized = counts / np.maximum(counts.sum(axis=1, keepdims=True), 1)
             sns.heatmap(normalized, vmin=0, vmax=1, cmap='Blues', ax=ax,
-                        xticklabels=CLASSES, yticklabels=CLASSES, cbar=True)
+                        xticklabels=classes, yticklabels=classes, cbar=True)
             ax.set(title=f'{model} · {highest}-shot baseline', xlabel='Predicted class', ylabel='True class')
             ax.tick_params(axis='x', labelrotation=90)
         fig.suptitle(label + '\nRow-normalized counts summed across repeated query evaluations')
@@ -182,99 +141,13 @@ def create_report(results, output=None):
                'models': config['models'], 'figures': names,
                'uncertainty': {'confidence_level': .95, 'method': 'percentile support-trial bootstrap',
                                'resamples': 2000, 'seed': 42, 'minimum_trials': 5,
-                               'scope': 'Conditional on fixed query images; no spatial/generalization or multiplicity coverage'},
+                               'scope': ('Descriptive bootstrap over fixed manifest episodes; images can recur across episodes; no independent spatial/generalization coverage'
+                                         if manifest.get('episode_source') else
+                                         'Conditional on fixed query images; no spatial/generalization or multiplicity coverage')},
                'variability': 'Population standard deviation across paired trials; not a confidence interval'})
     print('Result figures and tables:', output, flush=True)
     return {'output': str(output), 'figures': {name: str(output / f'{name}.png') for name in names},
             'selected': selected}
-
-
-def compare_budgets(primary_file, nine_file, output):
-    """Compare paired original-label and view budgets from the proposal."""
-    import numpy as np
-    import pandas as pd
-    import matplotlib.pyplot as plt
-
-    primary = json.loads(Path(primary_file).read_text())
-    nine = json.loads(Path(nine_file).read_text())
-    first, second = primary['manifest'], nine['manifest']
-    def common(manifest):
-        config = deepcopy(manifest['config'])
-        for field in ['shots', 'views', 'policies']:
-            config.pop(field)
-        return {'config': config, 'dataset': manifest['dataset'],
-                'checkpoints': manifest['checkpoints'], 'versions': manifest['versions']}
-    if common(first) != common(second) or first['config']['views'] != 4 or second['config']['views'] != 9:
-        raise ValueError('Budget comparisons need the same protocol and four-/nine-view runs')
-    if set(first['config']['shots']) != {1, 5, 10} or second['config']['shots'] != [1]:
-        raise ValueError('Budget comparisons need primary 1/5/10 shots and follow-up 1-shot')
-    if [t['1'] for t in first['trials']] != [t['1'] for t in second['trials']]:
-        raise ValueError('Original 1-shot support images must be identical across view budgets')
-    for report in [primary, nine]:
-        config = report['manifest']['config']
-        expected = {(m, p, k, t) for m in config['models'] for p in config['policies']
-                    for k in config['shots'] for t in range(config['trials'])}
-        actual = [(r['model'], r['policy'], r['shots'], r['trial']) for r in report['trials']]
-        if len(actual) != len(expected) or set(actual) != expected:
-            raise ValueError('Budget comparisons need complete, unique paired trials')
-    lookup = lambda report: {(r['model'], r['policy'], r['shots'], r['trial']): r for r in report['trials']}
-    four, extra = lookup(primary), lookup(nine)
-    comparisons = []
-    for model in first['config']['models']:
-        for trial in range(first['config']['trials']):
-            conditions = []
-            for policy in first['config']['policies']:
-                if policy != 'none':
-                    conditions.append(('one_plus_four_vs_five_originals', policy,
-                                       four[model, policy, 1, trial], four[model, 'none', 5, trial]))
-            for policy in second['config']['policies']:
-                if policy != 'none':
-                    if policy not in first['config']['policies']:
-                        raise ValueError('Nine-view methods must also appear in the primary grid')
-                    conditions.extend([
-                        ('one_plus_nine_vs_ten_originals', policy, extra[model, policy, 1, trial],
-                         four[model, 'none', 10, trial]),
-                        ('nine_vs_four_views', policy, extra[model, policy, 1, trial], four[model, policy, 1, trial])])
-            for name, policy, augmented, reference in conditions:
-                comparisons.append({'comparison': name, 'model': model, 'policy': policy, 'trial': trial,
-                                    'accuracy': augmented['test']['accuracy'],
-                                    'reference_accuracy': reference['test']['accuracy'],
-                                    'difference_percentage_points': 100 * (augmented['test']['accuracy'] - reference['test']['accuracy']),
-                                    'original_images': augmented['original_support_images'],
-                                    'reference_original_images': reference['original_support_images'],
-                                    'classifier_rows': augmented['classifier_rows'],
-                                    'reference_classifier_rows': reference['classifier_rows']})
-    frame = pd.DataFrame(comparisons)
-    output = Path(output)
-    output.mkdir(parents=True, exist_ok=True)
-    atomic(output / 'budget-comparisons.csv', lambda p: frame.to_csv(p, index=False))
-    summary = frame.groupby(['comparison', 'model', 'policy']).difference_percentage_points.agg(
-        mean='mean', std=lambda x: np.std(x, ddof=0), fraction_negative=lambda x: np.mean(x < 0)).reset_index()
-    intervals = frame.groupby(['comparison', 'model', 'policy']).difference_percentage_points.apply(
-        lambda values: pd.Series(dict(zip(['ci95_low', 'ci95_high'], trial_interval(values)))))
-    summary = summary.merge(intervals.unstack().reset_index(), on=['comparison', 'model', 'policy'])
-    atomic(output / 'budget-summary.csv', lambda p: summary.to_csv(p, index=False))
-    smoke = first['config']['mode'] == 'smoke'
-    label = 'SMOKE CHECK — execution validation' if smoke else 'DINOv2 view-budget comparisons'
-    kinds = [('one_plus_four_vs_five_originals', '1 original + 4 views versus 5 originals'),
-             ('one_plus_nine_vs_ten_originals', '1 original + 9 views versus 10 originals'),
-             ('nine_vs_four_views', '9 versus 4 added views at 1-shot')]
-    with plt.rc_context(STYLE):
-        fig, axes = plt.subplots(1, 3, figsize=(12, 4), layout='constrained')
-        for ax, (kind, title) in zip(axes, kinds):
-            data = summary[summary.comparison == kind]
-            labels = (data.model + ' / ' if len(first['config']['models']) > 1 else '') + data.policy.str.replace('_', ' / ', regex=False)
-            ax.barh(labels, data['mean'], xerr=data['std'], color='#376D95', capsize=2)
-            ax.axvline(0, color='#687682', linewidth=.8)
-            ax.set(title=title, xlabel='Paired difference (percentage points)')
-            ax.invert_yaxis()
-        fig.suptitle(label + '\nMean ± paired-trial SD; augmented views are not new labeled originals')
-        save_figure(fig, output, 'label_and_view_budgets')
-    result = {'mode': first['config']['mode'], 'output': str(output), 'comparisons': len(frame),
-              'figures': {'label_and_view_budgets': str(output / 'label_and_view_budgets.png')},
-              'sources': {'four_views': digest_file(primary_file), 'nine_views': digest_file(nine_file)}}
-    write_json(output / 'comparisons.json', result)
-    return result
 
 
 def proposal_analysis(report, output):
@@ -286,16 +159,17 @@ def proposal_analysis(report, output):
 
     rows = report['trials']
     config = report['manifest']['config']
+    class_names = report['manifest'].get('classes', CLASSES)
     baselines = {(r['model'], r['shots'], r['trial']): r for r in rows if r['policy'] == 'none'}
     class_rows = []
     for row in rows:
         baseline = baselines[row['model'], row['shots'], row['trial']]
-        for label, name in enumerate(CLASSES):
+        for label, name in enumerate(class_names):
             class_rows.append({'model': row['model'], 'shots': row['shots'], 'policy': row['policy'],
                                'trial': row['trial'], 'class': name, 'recall': row['test']['class_recall'][label],
-                               'precision': row['test'].get('class_precision', [None] * len(CLASSES))[label],
-                               'f1': row['test'].get('class_f1', [None] * len(CLASSES))[label],
-                               'support': row['test'].get('class_support', [None] * len(CLASSES))[label],
+                               'precision': row['test'].get('class_precision', [None] * len(class_names))[label],
+                               'f1': row['test'].get('class_f1', [None] * len(class_names))[label],
+                               'support': row['test'].get('class_support', [None] * len(class_names))[label],
                                'recall_gain_pp': 100 * (row['test']['class_recall'][label] - baseline['test']['class_recall'][label])})
     classes = pd.DataFrame(class_rows)
     atomic(output / 'class-effects.csv', lambda p: classes.to_csv(p, index=False))
@@ -376,7 +250,7 @@ def proposal_analysis(report, output):
                 if values.empty:
                     axes[i, j].set_axis_off()
                     continue
-                sns.heatmap(values.reindex(columns=CLASSES), cmap='RdBu', center=0, vmin=-100, vmax=100,
+                sns.heatmap(values.reindex(columns=class_names), cmap='RdBu', center=0, vmin=-100, vmax=100,
                             ax=axes[i, j], cbar=True)
                 axes[i, j].set(title=f'{model} · {shots}-shot', xlabel=None, ylabel=None)
                 axes[i, j].tick_params(axis='x', labelrotation=90, labelsize=7)
@@ -411,3 +285,66 @@ def metric_overview(report, output):
                      'No-augmentation model baselines; mean ± trial SD')
         save_figure(fig, output, 'classification_metrics')
     return ['classification_metrics']
+
+
+def display_model_evaluation(result, model):
+    """Display one model's saved metrics; no feature extraction or query-based selection."""
+    import pandas as pd
+    import numpy as np
+    import matplotlib.pyplot as plt
+    from IPython.display import display, Image as NotebookImage, Markdown
+
+    saved = json.loads((Path(result['output']) / 'results.json').read_text())
+    rows = [row for row in saved['trials'] if row['model'] == model]
+    if not rows:
+        display(Markdown(f'**{model}: not included in this run.**'))
+        return
+
+    table = pd.DataFrame([{'shots': r['shots'], 'policy': r['policy'], 'episode': r['trial'],
+                           'accuracy': r['test']['accuracy'], 'macro_f1': r['test']['macro_f1'],
+                           'selected_C': r['C'], 'dev_accuracy': r['dev_accuracy'],
+                           'fit_seconds': r['classifier_fit_seconds']} for r in rows])
+    display(table.groupby(['shots', 'policy']).agg(accuracy=('accuracy', 'mean'),
+            macro_f1=('macro_f1', 'mean'), episodes=('episode', 'count'),
+            dev_accuracy=('dev_accuracy', 'mean'), selected_C=('selected_C', 'first'),
+            mean_fit_seconds=('fit_seconds', 'mean')).round(4))
+
+    selected = [r for r in rows if r['policy'] == 'none' and r['shots'] == max(r['shots'] for r in rows)]
+    classes = saved['manifest']['classes']
+    recall = pd.DataFrame([r['test']['class_recall'] for r in selected], columns=classes).mean()
+    display(recall.rename('class_recall').round(4).to_frame())
+    matrix = np.sum([r['test']['confusion_matrix'] for r in selected], axis=0)
+    normalized = matrix / np.maximum(matrix.sum(axis=1, keepdims=True), 1)
+    with plt.rc_context(STYLE):
+        fig, ax = plt.subplots(figsize=(4.2, 3.5), layout='constrained')
+        plot = ax.imshow(normalized, vmin=0, vmax=1, cmap='Blues')
+        ax.set(xticks=range(4), yticks=range(4), xticklabels=classes, yticklabels=classes,
+               xlabel='Predicted class', ylabel='True class', title=f'{model}: unaugmented, largest shot budget')
+        ax.tick_params(axis='x', labelrotation=45, labelsize=7)
+        ax.tick_params(axis='y', labelsize=7)
+        fig.colorbar(plot, ax=ax, label='Fraction within true class')
+        destination = Path(result['report']['output'])
+        save_figure(fig, destination, model + '_confusion')
+    display(NotebookImage(filename=str(destination / f'{model}_confusion.png'), width=550))
+
+
+def baseline_comparison(result):
+    """Pair each model with ResNet on identical policy/shot/episode keys."""
+    import pandas as pd
+    saved = json.loads((Path(result['output']) / 'results.json').read_text())
+    frame = pd.DataFrame([{'model': r['model'], 'policy': r['policy'], 'shots': r['shots'],
+                           'episode': r['trial'], 'accuracy': r['test']['accuracy'],
+                           'macro_f1': r['test']['macro_f1']} for r in saved['trials']])
+    baseline = frame[frame.model == 'resnet18']
+    if baseline.empty:
+        return frame.groupby(['model', 'policy', 'shots'])[['accuracy', 'macro_f1']].mean().reset_index()
+    paired = frame.merge(baseline.drop(columns='model'), on=['policy', 'shots', 'episode'],
+                         suffixes=('', '_resnet'), validate='many_to_one')
+    paired['accuracy_gain_pp'] = 100 * (paired.accuracy - paired.accuracy_resnet)
+    paired['macro_f1_gain_pp'] = 100 * (paired.macro_f1 - paired.macro_f1_resnet)
+    output = paired.groupby(['model', 'policy', 'shots']).agg(accuracy=('accuracy', 'mean'),
+                         macro_f1=('macro_f1', 'mean'), episodes=('episode', 'count'),
+                         accuracy_gain_vs_resnet_pp=('accuracy_gain_pp', 'mean'),
+                         macro_f1_gain_vs_resnet_pp=('macro_f1_gain_pp', 'mean')).reset_index()
+    output.to_csv(Path(result['report']['output']) / 'resnet-baseline-comparison.csv', index=False)
+    return output

@@ -19,7 +19,6 @@ eurosat = "eurosat.cli:main"
 
 [project.optional-dependencies]
 notebook = ["nbformat>=5.10,<6", "nbclient>=0.10,<1", "ipykernel>=6,<8"]
-dev = ["nbformat>=5.10,<6", "nbclient>=0.10,<1", "ipykernel>=6,<8", "build>=1,<2"]
 
 [tool.setuptools.packages.find]
 where = ["src"]

@@ -1,51 +1,25 @@
-# Experimental protocol
+# Experimental methods
 
-## What is implemented
+## Source and fixed episodes
 
-- Four frozen backbones: ImageNet-1K ResNet-18, ConvNeXt-Tiny and ViT-B/16, plus official DINOv2 ViT-S/14. Backbone identifiers, the pinned DINOv2 source revision and software versions are saved with each experiment.
-- All ten classes, exact decoded-RGB pixel duplicate checks before splitting, and deterministic stratified 60% support-pool / 20% development / 20% held-out test partitions. Conflicting duplicate labels stop preparation. Geographic independence is not established by this image-level split.
-- Nested 1/5/10-shot support samples, shared across models and augmentation conditions. Full mode uses 20 paired trials. Augmented views do not count as new shots.
-- Frozen backbones in evaluation mode. ResNet uses pre-classifier pooled features; ConvNeXt retains its checkpoint's final normalization and pooled representation; ViT and DINOv2 use the final normalized class-token representation. Features are L2-normalized.
-- The same L2-regularized multinomial logistic-regression procedure for every model. C is chosen from `[0.1, 1, 10]` using development accuracy per trial; ties choose the smaller C. Development labels are additional selection data and are not included in the shot budget. Test labels do not select C or the preferred augmentation.
-- Separate support-only augmentation conditions: flip, rotation, translation, scaling, brightness/contrast, noise, blur and erasing. Full mode adds four views per original support image. No-augmentation and repeated-original controls are included. Development and test images receive deterministic preprocessing only.
-- Accuracy, Macro-F1, per-class recall, confusion matrices, and paired gains against each trial's no-augmentation baseline. JSON, CSV and development-selected augmentation tables are exported.
+The persistent EuroSAT RGB archive is verified against its published MD5. Extracted files are checked against archive sizes and CRCs; missing or changed files are restored locally. Images are decoded to RGB for exact-pixel duplicate detection; conflicting labels and corrupt images stop execution.
 
-Smoke mode uses 40 real images per class, one trial, one augmented view, ResNet-18, and none/repeat/flip conditions. Its results only establish that the workflow executes. Full mode is a substantial grid: 4 models × 10 conditions × 3 shot budgets × 20 trials = 2,400 classifier results. Plan the grid before reporting research results.
+The committed manifest defines six reserved base classes and four evaluated novel classes. Base train/validation/test partitions are retained for provenance but never train these frozen backbones. Novel development and test pools are disjoint. Each fixed four-way episode contains 1, 5 or 10 support originals per class and 15 query images per class. Supports and queries cannot overlap within an episode. Images can recur across episodes, and supports need not be nested across shot budgets. See [SPLITS.md](../SPLITS.md).
 
-## Storage and recovery
+All pools and all episodes are validated even during smoke execution. Selected image records and episode assignments are exported under `cache/data-audits/`, alongside manifest/archive fingerprints and check results. Smoke selects the first two development/test episodes per shot; full uses 100 development and 600 test episodes per shot. This is a four-class task, distinct from the ten-class image split described in the original proposal.
 
-In Colab, persistent storage is a new folder:
+## Representations and classifier
 
-```text
-MyDrive/ColabNotebooks/cs7643/EuroSATRepresentationBenchmark/
-  data/EuroSAT.zip            Downloaded once and checksum-verified
-  cache/weights/             Downloaded backbone implementations and weights
-  cache/dataset-*.json        Duplicate-check manifests
-  cache/split-*.json          Exact image partitions
-  cache/features/            Original/augmented embeddings, saved in chunks
-  cache/experiments/         Trial manifests, numeric classifier checkpoints, completed results
-  outputs/<experiment-id>/   results.json, summary.csv, development-selected-policies.json
-```
+All models use the exact same episodes and input pipeline: RGB, bilinear resize to 224×224, and ImageNet channel normalization. ResNet-18 returns pooled 512-dimensional features; ConvNeXt-Tiny returns 768-dimensional features after its classifier normalization and flattening. ViT-B/16 returns the final normalized 768-dimensional class token. DINOv2 ViT-S/14 returns the official normalized 384-dimensional class token. Classification heads are removed. All backbone parameters remain frozen and models stay in evaluation mode. Embeddings are checked for shape/finite values and L2-normalized.
 
-Extracted images live under `/content/eurosat-representation-benchmark` for fast reads. They are recreated from the persistent archive when Colab discards its runtime disk. No duplicated class-folder splits are written to Drive.
+Multinomial L2-regularized logistic regression is common to every model. C is selected from `[0.1, 1, 10]` using mean accuracy across development episodes; ties choose the smaller C. For test evaluation, the selected C is locked, and a classifier is fitted separately to each test episode's supports before predicting its queries. Development labels are extra selection data and are not included in the stated shot budget.
 
-Feature caches identify dataset contents, exact checkpoint IDs, preprocessing, augmentation policy, deterministic image/view seeds and software versions. Completed feature chunks survive interruption. Classifier parameters (`coef`, `intercept`, `classes`) are saved as numeric NPZ checkpoints; a JSON completion record is published afterward. A disconnected classifier trial repeats only that trial. Fully completed model results skip model loading and feature extraction on rerun.
+The default policy is no augmentation. Optional fixed-strength policies affect supports only; development/test queries use deterministic preprocessing. Original images and augmented views keep the same partition. Generated views are shared across model conditions; augmented views never count as additional shots. Repeated-original controls match classifier row counts. No test score selects a strength or policy.
 
-Original and augmented features are cached separately. All models use the same generated augmented image for a given image/policy/view seed. Reruns may still verify the archive and extract raw images after a runtime reset, but completed inference and classifier work is reused. There is no automatic cache deletion. Increment `PIPELINE_VERSION` when changing pipeline semantics or augmentation strengths.
+## Reporting and limitations
 
-Each execution records hardware, device, software versions and UTC time alongside the experimental manifest. A cached result retains its original stage timings; a resumed execution is not a fresh accelerator benchmark.
+The notebook shows each model independently, then pairs episode scores against ResNet-18. Reports include accuracy, Macro-F1, class metrics, confusion matrices and measured computational costs. Uncertainty describes variation across the fixed manifest episodes; reused images prevent interpreting episodes as independent geographic samples. See [metrics](metrics.md).
 
-Your Mac's cache is separate from Drive. The first Colab run does not automatically receive local data, weights or results.
+Checkpoints, software versions, image/view identities and experiment settings are recorded with results. Compatible cached features and completed trials are reused; cached timings are not fresh execution benchmarks. Atomic writes do not provide a distributed lock for simultaneous Google Drive writers.
 
-
-## Experimental limits and extensions
-
-Fixed initial augmentation strengths are: horizontal or vertical flip; rotation ±30°; translation ±22 pixels after resizing; scaling 0.8–1.2; brightness and contrast factors 0.7–1.3; Gaussian noise σ=0.05 before normalization; Gaussian blur with a 5×5 kernel and σ=0.1–1.5; and a square erasing region of side 22–67 pixels filled with 0.5 before normalization. These are explicit starting settings, not tuned optima.
-
-Full mode implements the primary original-plus-four-view comparison. To perform the proposal's selected nine-view comparisons, prespecify the model/policy subset and rerun with `config.views = 9` and `config.shots = [1]`; the numeric configuration distinguishes these artifacts. Cutout is implemented as an opt-in comparison. Backbone fine-tuning remains a separate optional extension. Neither is in the default grid. Hardware and wall-clock conditions affect timing; cold model-load/download time is included in `original_feature_seconds`. This measures an end-to-end extraction stage, not isolated accelerator throughput. Spatially related samples may remain across partitions because geographic grouping metadata has not been established.
-
-See [validation](docs/validation.md) for executed checks and remaining cloud verification.
-
-Existing Drive storage named `EuroSATLowData` is reused automatically to preserve earlier caches. New storage uses `EuroSATRepresentationBenchmark`; set `EUROSAT_STORAGE` to override it.
-
-The complete Part D suite now automates development-only strength selection and the four-/nine-view label-budget comparisons. See [Part D](part-d.md) for the exact selection rule, shared-strength requirement, cost measurements and outputs.
+Image-level separation does not establish geographic independence. Model comparisons also reflect differences in pretraining data and model size. Smoke scores demonstrate execution only.
