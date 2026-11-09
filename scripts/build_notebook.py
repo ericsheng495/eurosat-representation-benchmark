@@ -99,8 +99,8 @@ from pathlib import Path
 
 TARGET = os.environ.get('EUROSAT_TARGET', 'colab_gpu')
 MODE = os.environ.get('EUROSAT_MODE', 'full')  # Full ResNet-18 + DINOv2 batch; smoke is opt-in.
-ASSIGNMENT = os.environ.get('EUROSAT_ASSIGNMENT', 'dinov2_vits14')
-EXPERIMENT = os.environ.get('EUROSAT_EXPERIMENT', 'part-d' if ASSIGNMENT == 'dinov2_vits14' else 'primary')
+ASSIGNMENT = os.environ.get('EUROSAT_ASSIGNMENT', 'convnext_tiny')
+EXPERIMENT = os.environ.get('EUROSAT_EXPERIMENT', 'part-b' if ASSIGNMENT == 'convnext_tiny' else 'part-d' if ASSIGNMENT == 'dinov2_vits14' else 'primary')
 SELECT_STRENGTHS = True  # Development-only selection before the primary grid.
 INCLUDE_CUTOUT = False  # Optional proposal comparison.
 INCLUDE_RESNET_BASELINE = True  # Proposal's conventional CNN baseline, matched protocol.
@@ -160,7 +160,7 @@ All ten land-use classes are retained. Decoded-RGB duplicates are checked before
 
 Frozen backbones: ResNet-18, ConvNeXt-Tiny, ViT-B/16 and DINOv2 ViT-S/14. A shared multinomial logistic-regression procedure operates on L2-normalized embeddings. Development accuracy selects C and the preferred augmentation; test labels never select settings. The full preset uses 20 paired trials and original-plus-four-view conditions. See `docs/methodology.md` for strengths, checkpoint identities and interpretation limits.
 '''),
-        code('''config = part_d_config(MODE, INCLUDE_CUTOUT) if EXPERIMENT == 'part-d' else (Config.full() if MODE == 'full' else Config())
+        code('''config = part_b_config(MODE) if EXPERIMENT == 'part-b' else part_d_config(MODE, INCLUDE_CUTOUT) if EXPERIMENT == 'part-d' else (Config.full() if MODE == 'full' else Config())
 if ASSIGNMENT != 'all':
     config.models = [ASSIGNMENT]
 for field in ['models', 'policies']:
@@ -306,7 +306,10 @@ print('Part D:', part_d_config.models, '| pinned checkpoint:', MODEL_IDS['dinov2
 
 Only support images receive random augmentation. Development and test preprocessing are deterministic. Feature extraction is cached in chunks, classifier parameters are stored as numeric checkpoints, and completed trials are skipped. This cell does not repeat dataset cleaning or GPU work that has already completed for the same configuration.
 '''),
-        code('''if EXPERIMENT == 'part-d':
+        code('''if EXPERIMENT == 'part-b':
+    suite = {'output': str(STORAGE / 'outputs' / 'part-b'), 'primary': run_part_b(STORAGE, SCRATCH, target=TARGET, mode=MODE, config=config)}
+    results = suite['primary']
+elif EXPERIMENT == 'part-d':
     suite = run_part_d(STORAGE, SCRATCH, target=TARGET, mode=MODE, config=config,
                        select_strengths=SELECT_STRENGTHS, include_cutout=INCLUDE_CUTOUT,
                        selected_methods=NINE_VIEW_METHODS, include_resnet=INCLUDE_RESNET_BASELINE)

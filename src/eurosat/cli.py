@@ -25,14 +25,20 @@ def main(argv=None):
     report = commands.add_parser('report', help='Render figures and tables from completed results')
     report.add_argument('results', type=Path)
     report.add_argument('--output', type=Path)
-    suite = commands.add_parser('part-d', help='Run the proposal-aligned DINOv2 experiment suite')
-    suite.add_argument('--mode', choices=['smoke', 'full'], default='full')
-    suite.add_argument('--storage', type=Path, default=Path.cwd())
-    suite.add_argument('--skip-strength-selection', action='store_true')
-    suite.add_argument('--include-cutout', action='store_true')
-    suite.add_argument('--skip-resnet-baseline', action='store_true')
-    suite.add_argument('--selected-methods', type=int, default=2)
+    part_b = commands.add_parser('part-b', help='Run the proposal-aligned ConvNeXt-Tiny experiment suite')
+    part_b.add_argument('--mode', choices=['smoke', 'full'], default='full')
+    part_b.add_argument('--storage', type=Path, default=Path.cwd())
+    part_d = commands.add_parser('part-d', help='Run the proposal-aligned DINOv2 experiment suite')
+    part_d.add_argument('--mode', choices=['smoke', 'full'], default='full')
+    part_d.add_argument('--storage', type=Path, default=Path.cwd())
+    part_d.add_argument('--skip-strength-selection', action='store_true')
+    part_d.add_argument('--include-cutout', action='store_true')
+    part_d.add_argument('--skip-resnet-baseline', action='store_true')
+    part_d.add_argument('--selected-methods', type=int, default=2)
     args = parser.parse_args(argv)
+    if args.command == 'part-b':
+        from .experiments import run_part_b
+        return run_part_b(args.storage, args.storage / 'data/extracted', target='local', mode=args.mode)
     if args.command == 'part-d':
         from .experiments import run_part_d
         return run_part_d(args.storage, args.storage / 'data/extracted', target='local',

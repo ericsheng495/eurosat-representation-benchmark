@@ -17,6 +17,27 @@ from .reporting import compare_budgets, create_report, merge_results
 from .runtime import check_device, environment
 
 
+def part_b_config(mode='full'):
+    """Proposal-aligned ConvNeXt-Tiny benchmark; smoke keeps the same protocol on a reduced subset."""
+    if mode not in {'full', 'smoke'}:
+        raise ValueError('mode must be full or smoke')
+    config = Config.full() if mode == 'full' else Config(trials=2, views=4, policies=POLICIES.copy())
+    config.models = ['convnext_tiny']
+    config.validate()
+    return config
+
+
+def run_part_b(storage, scratch, target='colab_gpu', mode='full', config=None):
+    """Run the ConvNeXt-Tiny Part B grid with the standard frozen-backbone pipeline."""
+    config = config or part_b_config(mode)
+    config.validate()
+    if config.models != ['convnext_tiny']:
+        raise ValueError('Part B uses the ConvNeXt-Tiny backbone only')
+    if set(config.shots) != {1, 5, 10} or config.views < 1:
+        raise ValueError('Part B requires 1/5/10 shots and at least one view')
+    return run(config, storage, scratch, target)
+
+
 def part_d_config(mode='full', include_cutout=False):
     """The primary DINOv2 grid; smoke preserves every condition on a small subset."""
     if mode not in {'full', 'smoke'}:
