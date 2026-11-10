@@ -13,13 +13,12 @@ from jupyter_client.kernelspec import KernelSpecManager
 
 def parse_args():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--mode', choices=['full', 'smoke'], help='Default: full benchmark, smoke fine-tuning')
-    parser.add_argument('--models', help='Default: DINOv2')
+    parser.add_argument('--mode', choices=['full', 'smoke'], default='smoke')
+    parser.add_argument('--models', help='Default: all four frozen backbones')
     parser.add_argument('--policies')
     parser.add_argument('--trials', type=int)
     parser.add_argument('--views', type=int)
-    parser.add_argument('--experiment', choices=['primary', 'part-d'])
-    parser.add_argument('--notebook', type=Path, help='Defaults to the generated self-contained Colab notebook')
+    parser.add_argument('--notebook', type=Path, help='Defaults to the generated benchmark notebook')
     parser.add_argument('--output', type=Path, help='Save outputs here; defaults to the input notebook')
     return parser.parse_args()
 
@@ -28,11 +27,8 @@ def main():
     args = parse_args()
     root = Path(__file__).resolve().parents[1]
     source = args.notebook or root / 'EuroSAT_Representation_Benchmark.ipynb'
-    is_finetuning = source.name == 'EuroSAT_Fine_Tuning.ipynb'
-    mode = args.mode or ('smoke' if is_finetuning else 'full')
-    models = args.models or 'dinov2_vits14'
-    if is_finetuning and models != 'dinov2_vits14':
-        raise ValueError('The partial fine-tuning notebook focuses on dinov2_vits14')
+    mode = args.mode
+    models = args.models or os.environ.get('EUROSAT_MODELS', 'all')
     output = args.output or source
     output.parent.mkdir(parents=True, exist_ok=True)
     notebook = nbformat.read(source, as_version=4)
@@ -56,9 +52,7 @@ def main():
         client = NotebookClient(notebook, km=manager, timeout=7200, iopub_timeout=120,
                                 on_cell_start=on_cell_start, on_cell_executed=on_cell_executed)
         env = dict(os.environ, EUROSAT_TARGET='local', EUROSAT_MODE=mode,
-                   EUROSAT_STORAGE=str(root), EUROSAT_MODELS=models,
-                   EUROSAT_FINETUNE_MODE=mode, EUROSAT_FINETUNE_MODEL=models,
-                   EUROSAT_EXPERIMENT=args.experiment or ('part-d' if models == 'dinov2_vits14' else 'primary'),
+                   EUROSAT_STORAGE=os.environ.get('EUROSAT_STORAGE', str(root)), EUROSAT_MODELS=models,
                    MPLBACKEND='Agg')
         for field in ['policies', 'trials', 'views']:
             value = getattr(args, field)

@@ -10,11 +10,12 @@ EXTRA_METRICS = ['macro_precision', 'macro_recall', 'balanced_accuracy',
                  'weighted_f1', 'mcc', 'cohen_kappa']
 
 
-def metrics_from_confusion(matrix):
+def metrics_from_confusion(matrix, class_labels=None):
     """Compute class metrics directly from counts, including old cached results."""
     cm = np.asarray(matrix, dtype=float)
-    if cm.shape != (len(CLASSES), len(CLASSES)) or not np.isfinite(cm).all() or np.any(cm < 0) or np.any(cm != np.floor(cm)):
-        raise ValueError('Expected a finite nonnegative ten-class count matrix')
+    count = len(CLASSES) if class_labels is None else len(class_labels)
+    if cm.shape != (count, count) or not np.isfinite(cm).all() or np.any(cm < 0) or np.any(cm != np.floor(cm)):
+        raise ValueError('Expected a finite nonnegative count matrix for the evaluation classes')
     total = cm.sum()
     if total == 0:
         raise ValueError('Cannot score an empty query set')
@@ -26,7 +27,7 @@ def metrics_from_confusion(matrix):
     expected = np.dot(support, predicted) / total ** 2
     denominator = np.sqrt((total ** 2 - np.dot(support, support)) *
                           (total ** 2 - np.dot(predicted, predicted)))
-    return {'accuracy': float(accuracy), 'macro_f1': float(f1.mean()),
+    metrics = {'accuracy': float(accuracy), 'macro_f1': float(f1.mean()),
             'macro_precision': float(precision.mean()), 'macro_recall': float(recall.mean()),
             'weighted_f1': float(np.dot(f1, support) / total),
             'balanced_accuracy': float(recall[support > 0].mean()),
@@ -35,17 +36,23 @@ def metrics_from_confusion(matrix):
             'class_precision': precision.tolist(), 'class_recall': recall.tolist(),
             'class_f1': f1.tolist(), 'class_support': support.astype(int).tolist(),
             'confusion_matrix': cm.astype(int).tolist()}
+    if class_labels is not None:
+        metrics['class_labels'] = list(class_labels)
+    return metrics
 
 
-def score(labels, predictions):
-    matrix = confusion_matrix(labels, predictions, labels=list(range(len(CLASSES))))
-    return metrics_from_confusion(matrix)
+def score(labels, predictions, class_labels=None):
+    ordered = list(range(len(CLASSES))) if class_labels is None else list(class_labels)
+    if not set(labels) <= set(ordered) or not set(predictions) <= set(ordered):
+        raise ValueError('Labels and predictions must belong to the evaluation classes')
+    matrix = confusion_matrix(labels, predictions, labels=ordered)
+    return metrics_from_confusion(matrix, class_labels)
 
 
 def complete_metrics(row):
     """Upgrade confusion-derived metrics without inference or classifier refitting."""
     if 'confusion_matrix' in row['test']:
-        row['test'].update(metrics_from_confusion(row['test']['confusion_matrix']))
+        row['test'].update(metrics_from_confusion(row['test']['confusion_matrix'], row['test'].get('class_labels')))
     return row
 
 
@@ -62,13 +69,17 @@ def trial_interval(values, *, seed=42, resamples=2000):
     return float(low), float(high)
 
 
+def fit_linear(x, y, c, seed):
+    """The same frozen-embedding logistic regression for every evaluation workflow."""
+    classifier = LogisticRegression(C=c, solver='lbfgs', max_iter=2000, random_state=seed)
+    return classifier.fit(x, y)
+
+
 def fit_classifier(x, y, dev_x, dev_y, config):
     best, selected, dev_accuracy = None, None, -1.
     for c in sorted(config.classifier_cs):
         # lbfgs uses multinomial loss for this ten-class task and L2 regularization.
-        classifier = LogisticRegression(C=c, solver='lbfgs', max_iter=2000,
-                                        random_state=config.seed)
-        classifier.fit(x, y)
+        classifier = fit_linear(x, y, c, config.seed)
         accuracy = classifier.score(dev_x, dev_y)
         if accuracy > dev_accuracy:
             best, selected, dev_accuracy = classifier, c, float(accuracy)

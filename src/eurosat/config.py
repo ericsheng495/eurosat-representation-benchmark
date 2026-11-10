@@ -1,5 +1,5 @@
 """Experiment presets and immutable dataset/checkpoint identities."""
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 import math
 
 PIPELINE_VERSION = '1'
@@ -9,6 +9,9 @@ DATA_MD5 = 'c8fa014336c82ac7804f0398fcb19387'
 DINO_REVISION = '7764ea0f912e53c92e82eb78a2a1631e92725fc8'
 CLASSES = ['AnnualCrop', 'Forest', 'HerbaceousVegetation', 'Highway', 'Industrial',
            'Pasture', 'PermanentCrop', 'Residential', 'River', 'SeaLake']
+# Fixed class membership for four-way evaluation from the shared split manifest.
+BASE_CLASSES = ['AnnualCrop', 'Forest', 'Highway', 'Industrial', 'Residential', 'SeaLake']
+NOVEL_CLASSES = ['HerbaceousVegetation', 'Pasture', 'PermanentCrop', 'River']
 MODEL_IDS = {
     'resnet18': 'torchvision.ResNet18_Weights.IMAGENET1K_V1',
     'convnext_tiny': 'torchvision.ConvNeXt_Tiny_Weights.IMAGENET1K_V1',
@@ -23,13 +26,14 @@ OPTIONAL_POLICIES = ['cutout']
 @dataclass
 class Config:
     mode: str = 'smoke'
+    data_protocol: str = 'base_novel'
     seed: int = 42
-    models: list = field(default_factory=lambda: ['resnet18'])
-    policies: list = field(default_factory=lambda: ['none', 'repeat', 'flip'])
+    models: list = field(default_factory=lambda: list(MODEL_IDS))
+    policies: list = field(default_factory=lambda: ['none'])
     shots: list = field(default_factory=lambda: [1, 5, 10])
-    trials: int = 1
+    trials: int = 2
     views: int = 1
-    per_class_limit: int | None = 40
+    per_class_limit: int | None = None
     batch_size: int = 32
     chunk_size: int = 256
     policy_strengths: dict = field(default_factory=dict)
@@ -37,10 +41,12 @@ class Config:
 
     @classmethod
     def full(cls):
-        return cls(mode='full', models=list(MODEL_IDS), policies=POLICIES.copy(),
-                   trials=20, views=4, per_class_limit=None)
+        return cls(mode='full', models=list(MODEL_IDS), policies=['none'],
+                   trials=600, views=4, per_class_limit=None)
 
     def validate(self):
+        if self.data_protocol != 'base_novel':
+            raise ValueError('Use the fixed base_novel manifest protocol')
         if self.mode not in {'smoke', 'full'}:
             raise ValueError('mode must be smoke or full')
         if not self.models or set(self.models) - MODEL_IDS.keys():
@@ -57,3 +63,8 @@ class Config:
             raise ValueError('Augmentation strengths must be finite and in (0, 2]')
         if not self.classifier_cs or min(self.classifier_cs) <= 0:
             raise ValueError('Classifier C values must be positive')
+
+
+def config_dict(config):
+    """Serialize the configuration used in experiment/cache identities."""
+    return asdict(config)

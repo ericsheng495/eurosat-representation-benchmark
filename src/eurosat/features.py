@@ -1,28 +1,15 @@
 """Chunked original/augmented feature extraction and recovery."""
 import time
+import zipfile
 import numpy as np
 import torch
-from torch.utils.data import DataLoader, Dataset
-from .augment import image_tensor
+from torch.utils.data import DataLoader
+from .preprocessing.images import Images
 from .cache import key, write_npz
 from .config import MODEL_IDS
+from .models import EMBEDDING_DIMENSIONS
 from .runtime import environment, memory_usage
 
-
-class Images(Dataset):
-    def __init__(self, root, records, items, policy, seed, strength=1.):
-        self.root, self.records, self.items = root, records, items
-        self.policy, self.seed, self.strength = policy, seed, strength
-
-    def __len__(self):
-        return len(self.items)
-
-    def __getitem__(self, index):
-        image_id, view = self.items[index]
-        record = self.records[image_id]
-        # Image/view seeds are shared across backbones and independent of batch/chunk order.
-        seed = int(key([self.seed, record['pixels_sha256'], self.policy, view])[:15], 16)
-        return image_tensor(self.root / record['path'], self.policy, seed, self.strength), record['label']
 
 
 def extract(storage, root, records, dataset_id, model_name, model, device, items, policy, config, stats=None):
@@ -41,19 +28,34 @@ def extract(storage, root, records, dataset_id, model_name, model, device, items
     for start in range(0, len(items), config.chunk_size):
         chunk_items = items[start:start + config.chunk_size]
         path = storage / 'cache/features' / (key({'config': identity, 'items': chunk_items}) + '.npz')
+        features = targets = None
         if path.exists():
+            try:
+                with np.load(path, allow_pickle=False) as cached:
+                    features, targets = cached['features'], cached['labels']
+                expected = np.array([records[i]['label'] for i, _ in chunk_items])
+                if (features.ndim != 2 or features.shape[0] != len(chunk_items) or features.shape[1] < 1
+                        or features.shape[1] != EMBEDDING_DIMENSIONS[model_name]
+                        or not np.isfinite(features).all() or not np.array_equal(targets, expected)):
+                    raise ValueError('Invalid cached feature shape, values or labels')
+            except (OSError, ValueError, KeyError, EOFError, zipfile.BadZipFile) as error:
+                print(f'CACHE MISS {model_name}/{policy}: invalid chunk {path.name}: {error}', flush=True)
+                features = targets = None
+        if features is not None:
             cached_chunks += 1
-            with np.load(path, allow_pickle=False) as cached:
-                features, targets = cached['features'], cached['labels']
-            print(f'Cached {model_name}/{policy}: {start}:{start + len(chunk_items)}', flush=True)
+            print(f'CACHE HIT features {model_name}/{policy}: {start}:{start + len(chunk_items)}', flush=True)
         else:
+            print(f'CACHE MISS features {model_name}/{policy}: {start}:{start + len(chunk_items)}', flush=True)
             computed_chunks += 1
             dataset = Images(root, records, chunk_items, policy, config.seed, strength)
             loader = DataLoader(dataset, batch_size=config.batch_size, shuffle=False, num_workers=0)
             features, targets = [], []
             with torch.inference_mode():
                 for images, y in loader:
-                    features.append(model(images.to(device)).flatten(1).float().cpu().numpy())
+                    batch = model(images.to(device)).flatten(1).float().cpu().numpy()
+                    if batch.shape[1] != EMBEDDING_DIMENSIONS[model_name] or not np.isfinite(batch).all():
+                        raise ValueError(f'{model_name}: expected finite embeddings of width {EMBEDDING_DIMENSIONS[model_name]}')
+                    features.append(batch)
                     targets.append(y.numpy())
             features, targets = np.concatenate(features), np.concatenate(targets)
             features /= np.maximum(np.linalg.norm(features, axis=1, keepdims=True), 1e-12)

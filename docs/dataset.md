@@ -1,15 +1,16 @@
-# Dataset exploration
+# Dataset checks and inspection
 
-The verified full EuroSAT RGB archive contains **27,000 native 64 × 64 RGB images across ten classes**. This checkout's decoded-pixel audit found **zero exact duplicates**, zero corrupt images and zero image/pixel overlap between partitions. Class sizes range from 2,000 to 3,000 (ratio 1.5). These are measured audit results, not a claim of geographic independence.
+EuroSAT RGB contains 27,000 native 64×64 RGB tiles across ten classes. This checkout's decoded-pixel audit found zero exact duplicates and zero corrupt images. The benchmark evaluates the four novel classes defined in the [committed manifest](../SPLITS.md); the six base classes are reserved.
 
-The deterministic stratified split retains 16,200 support-pool, 5,400 development and 5,400 held-out test images. The original-shot budget samples from the support pool; it does not train on the entire pool. Full-dataset EDA runs even when later execution is in smoke mode.
+Notebook section 3 exposes the processing steps:
 
-![Class distribution](figures/class_distribution.png)
+1. **Verify source:** check the persistent ZIP checksum, check extracted files against archive CRCs, restore missing/changed files, and audit decoded pixels. Display the ten-class source inventory and native image properties.
+2. **Validate manifest:** check complete pool coverage, filenames, class membership, partition isolation and every support/query episode. Display pool sizes and episode counts.
+3. **Select assignments:** choose the fixed smoke/full episode prefix, export records and assignments, and show actual image paths and reuse counts.
+4. **Inspect inputs:** display native development support images and novel pool counts, then check normalized tensors for shape, finite values and repeatable transforms.
 
-![Single native image](figures/example_tile.png)
+Audit JSON files, image assignments, usage CSV and generated PNG/PDF figures live under `cache/data-audits/<manifest-id>/<selection-id>/`. Follow the notebook's printed path to inspect them. Examples come from development supports; test queries do not select settings or illustrative examples.
 
-The notebook displays six numbered figures: cleaning counts, class distributions, one labeled image, all ten classes, the actual stratified shuffle, and processed augmentation examples. pandas provides tables; seaborn and matplotlib generate plots. Native examples come only from support images, use nearest-neighbor display, and are not enhanced. Augmentation views are explicitly distinguished from native images. Pixel markers are not geographic scale claims.
+The novel pools contain 3,000 development and 7,000 test images. Each episode samples four classes with 15 query images per class; images may recur across episodes. This separation does not establish geographic independence.
 
-Reproduce with `python -m eurosat explore --output docs/figures`. PNGs use 300 DPI; PDFs are available alongside them. [Measured profile](figures/dataset_profile.json), [class counts](figures/class_counts.csv) and [example provenance](figures/figure_sources.json) accompany the figures.
-
-Dataset attribution: Patrick Helber, Benjamin Bischke, Andreas Dengel and Damian Borth, “EuroSAT: A Novel Dataset and Deep Learning Benchmark for Land Use and Land Cover Classification,” IEEE JSTARS, 2019. Sentinel-2 imagery: Copernicus. Refer to the [official EuroSAT project](https://github.com/phelber/EuroSAT) for dataset citation and terms.
+Attribution: Patrick Helber, Benjamin Bischke, Andreas Dengel and Damian Borth, “EuroSAT: A Novel Dataset and Deep Learning Benchmark for Land Use and Land Cover Classification,” IEEE JSTARS, 2019. Sentinel-2 imagery: Copernicus. See the [official dataset repository](https://github.com/phelber/EuroSAT) for citation and terms.

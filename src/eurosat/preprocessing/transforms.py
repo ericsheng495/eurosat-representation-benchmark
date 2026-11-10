@@ -4,11 +4,14 @@ from PIL import Image
 import torch
 from torchvision.transforms import functional as TF, InterpolationMode
 
+IMAGE_SIZE = 224
+IMAGENET_MEAN = (.485, .456, .406)
+IMAGENET_STD = (.229, .224, .225)
 
 def image_tensor(path, policy, seed, strength=1.):
     rng = random.Random(seed)
     with Image.open(path) as image:
-        image = TF.resize(image.convert('RGB'), [224, 224], InterpolationMode.BILINEAR)
+        image = TF.resize(image.convert('RGB'), [IMAGE_SIZE, IMAGE_SIZE], InterpolationMode.BILINEAR)
     if policy == 'flip':
         image = TF.hflip(image) if rng.random() < .5 else TF.vflip(image)
     elif policy == 'rotation':
@@ -32,4 +35,4 @@ def image_tensor(path, policy, seed, strength=1.):
         size = rng.randint(round(22 * strength ** .5), round(67 * strength ** .5))
         top, left = rng.randrange(225 - size), rng.randrange(225 - size)
         tensor[:, top:top + size, left:left + size] = .5 if policy == 'erasing' else 0.
-    return TF.normalize(tensor, [0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+    return TF.normalize(tensor, IMAGENET_MEAN, IMAGENET_STD)
