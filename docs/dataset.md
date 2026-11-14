@@ -2,7 +2,7 @@
 
 EuroSAT RGB contains 27,000 native 64×64 RGB tiles across ten classes. This checkout's decoded-pixel audit found zero exact duplicates and zero corrupt images. The benchmark evaluates the four novel classes defined in the [committed manifest](../SPLITS.md); the six base classes are reserved.
 
-Notebook section 3 exposes the processing steps:
+Notebook Section 3 (Data check) runs these steps and shows a pass/fail summary; set `SHOW_DETAILS = True` in the Settings cell to display each table:
 
 1. **Verify source:** check the persistent ZIP checksum, check extracted files against archive CRCs, restore missing/changed files, and audit decoded pixels. Display the ten-class source inventory and native image properties.
 2. **Validate manifest:** check complete pool coverage, filenames, class membership, partition isolation and every support/query episode. Display pool sizes and episode counts.
