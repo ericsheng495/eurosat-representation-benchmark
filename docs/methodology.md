@@ -14,7 +14,7 @@ All models use the exact same episodes and input pipeline: RGB, bilinear resize 
 
 Multinomial L2-regularized logistic regression is common to every model. C is selected from `[0.1, 1, 10]` using mean accuracy across development episodes; ties choose the smaller C. For test evaluation, the selected C is locked, and a classifier is fitted separately to each test episode's supports before predicting its queries. Development labels are extra selection data and are not included in the stated shot budget.
 
-The default policy is no augmentation. Optional fixed-strength policies affect supports only; development/test queries use deterministic preprocessing. Original images and augmented views keep the same partition. Generated views are shared across model conditions; augmented views never count as additional shots. Repeated-original controls match classifier row counts. No test score selects a strength or policy.
+The default policy is no augmentation. Optional policies affect supports only, with magnitudes fixed before execution: defaults are `AUGMENTATION_DEFAULTS` in `src/eurosat/config.py`, and the notebook's Settings cell (`POLICIES`, `VIEWS`, `AUGMENTATION`) shows and overrides them. Results record the values used; development/test queries use deterministic preprocessing. Original images and augmented views keep the same partition. Generated views are shared across model conditions; augmented views never count as additional shots. Repeated-original controls match classifier row counts. No test score selects a strength or policy.
 
 ## Reporting and limitations
 

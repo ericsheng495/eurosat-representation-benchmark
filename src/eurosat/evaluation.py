@@ -57,7 +57,7 @@ def complete_metrics(row):
 
 
 def trial_interval(values, *, seed=42, resamples=2000):
-    """95% percentile bootstrap over support trials, conditional on fixed queries."""
+    """95% percentile bootstrap over fixed manifest episodes (each with its own supports and queries)."""
     values = np.asarray(values, dtype=float)
     if len(values) < MIN_CI_TRIALS:
         return None, None
@@ -78,7 +78,7 @@ def fit_linear(x, y, c, seed):
 def fit_classifier(x, y, dev_x, dev_y, config):
     best, selected, dev_accuracy = None, None, -1.
     for c in sorted(config.classifier_cs):
-        # lbfgs uses multinomial loss for this ten-class task and L2 regularization.
+        # lbfgs uses multinomial loss for this four-way episode task and L2 regularization.
         classifier = fit_linear(x, y, c, config.seed)
         accuracy = classifier.score(dev_x, dev_y)
         if accuracy > dev_accuracy:

@@ -41,22 +41,27 @@ TODO.md                               Checkoff plan and remaining experiments
 
 ## Notebook workflow
 
-### 1–2. Configuration, environment and storage
+Each section opens with three lines: what it **does**, what **you get**, and what to **edit**. Only the Settings cell needs editing; section helpers live in `src/eurosat/notebook.py`.
 
-Choose smoke/full mode, all models or a subset, and local/Colab hardware. Connect persistent storage and import the shared source package. These steps do not train or load a backbone.
+| Section | What it does |
+|---|---|
+| 1 · Settings | The only cell to edit: `TARGET`, `MODE`, `MODELS`, `POLICIES`, `VIEWS`, `AUGMENTATION`, `SHOW_DETAILS`, `REPORT_RESULTS` |
+| 2 · Setup | Installs packages, connects storage, finds `src/` (visible code), then validates the settings and prints a run summary |
+| 3 · Data check | Verifies the archive and every manifest pool/episode, selects the fixed episodes, shows a pass/fail summary |
+| 4 · Run | Runs or resumes each model; loads saved results in report-only mode |
+| 5 · Results: models | No-augmentation scores, paired gains over ResNet-18, per-model recall and confusion matrix |
+| 6 · Results: augmentation | Paired gains per method, development-selected method, per-class effects |
+| 7 · Saved files | Output folders |
 
-### 3. Data processing and inspection
+`SHOW_DETAILS = True` adds every data-check table (source inventory, pools, image reuse, example assignments, input check) and extra result figures.
 
-The notebook exposes four stages instead of hiding preparation in one call:
+### Data checks
 
-1. Verify the EuroSAT ZIP checksum and extracted-file CRCs, restore missing/changed files, and audit decoding and exact-pixel duplicates. Display all ten source classes and native image properties.
-2. Validate every committed pool and episode, including filename coverage, class membership, shot/query counts and development/test isolation.
-3. Select fixed episodes without resampling. Export the exact image records, episode assignments and validation results, and display image-reuse counts and example paths.
-4. Inspect native development support images, pool distributions and normalized `3 × 224 × 224` inputs. Check finite values and deterministic reads.
+Section 3 verifies the EuroSAT ZIP checksum and extracted-file CRCs (restoring missing or changed files), audits decoding and exact-pixel duplicates, validates every committed pool and episode, selects fixed episodes without resampling, and checks normalized `3 × 224 × 224` inputs. Records, assignments and check results are exported.
 
 Six base classes are reserved and do not train these backbones. Four novel classes—HerbaceousVegetation, Pasture, PermanentCrop and River—are evaluated. Each episode has k support originals and 15 queries per class. Development/test pools are disjoint; images may recur across episodes. Supports are not guaranteed nested across shot budgets. See [SPLITS.md](SPLITS.md) and [dataset checks](docs/dataset.md).
 
-### 4–5. Four frozen models and shared execution
+### Four frozen models and shared execution
 
 | Model | Role | Embedding width | Implementation |
 |---|---|---:|---|
@@ -67,30 +72,30 @@ Six base classes are reserved and do not train these backbones. Four novel class
 
 Implementation paths are relative to `src/eurosat/`. Every model receives identical episode assignments and preprocessing. Backbones remain frozen in evaluation mode; embeddings are L2-normalized. Development episodes select logistic-regression C from `[0.1, 1, 10]`. A classifier is then fitted to each test episode's supports and evaluated on its queries. Query scores never choose settings.
 
-Models run sequentially and release GPU memory between backbones. The default policy is no augmentation. Optional deterministic support-only policies and repeated-original controls remain available; the default run does not execute the proposal's complete augmentation/view-budget study. See [methods](docs/methodology.md).
+Models run sequentially and release GPU memory between backbones. The default policy is no augmentation. Augmentation conditions, view count and magnitudes are set in the notebook's Settings cell (`POLICIES`, `VIEWS`, `AUGMENTATION`); defaults live in `AUGMENTATION_DEFAULTS` in `src/eurosat/config.py`. Optional deterministic support-only policies and repeated-original controls remain available; the default run does not execute the proposal's complete augmentation/view-budget study. See [methods](docs/methodology.md).
 
-### 6–7. Individual evaluation and model comparisons
+### Results
 
-Each model has its own result cell with accuracy, Macro-F1, development-selected C, class recall and a confusion matrix. The final cells compare all selected models with the ResNet-18 baseline using paired episode differences in percentage points.
+Section 5 compares all selected models with the ResNet-18 baseline using paired episode differences in percentage points, then shows each model's accuracy, Macro-F1, development-selected C, class recall and confusion matrix. Section 6 reports augmentation gains when `POLICIES` includes methods other than `none`.
 
 Results include `results.json`, `summary.csv`, class metrics, timing tables, provenance and report plots. Smoke scores validate execution only. Image reuse and pretraining differences limit interpretation; see [metrics](docs/metrics.md).
 
 ## Run in Google Colab
 
-Open [EuroSAT_Representation_Benchmark.ipynb](EuroSAT_Representation_Benchmark.ipynb) with a GPU runtime. Set `EUROSAT_CODE_DIR` to a repository checkout, or copy `src/` into `<shared storage>/code/src/`. Copy the committed `splits_manifest.json` into shared storage, or set `MANIFEST_FILE` to its path. Uploading the notebook alone does not include these dependencies.
+Open [EuroSAT_Representation_Benchmark.ipynb](EuroSAT_Representation_Benchmark.ipynb) with a GPU runtime. Set `CODE_DIR` to a repository checkout, or copy `src/` into `<shared storage>/code/src/`. Copy the committed `splits_manifest.json` into shared storage, or set `MANIFEST_FILE` to its path. Uploading the notebook alone does not include these dependencies.
 
-Set the first configuration cell, then run cells in order:
+Edit the Settings cell (Section 1), then run cells in order:
 
 ```python
 MODE = 'smoke'  # full: 100 development and 600 test episodes per shot
 MODELS = 'all'  # or resnet18, convnext_tiny, vit_b_16, dinov2_vits14
 ```
 
-Smoke uses two development and two test episodes for each of 1, 5 and 10 shots. Model subsets can be comma-separated. Environment overrides include `EUROSAT_MODE`, `EUROSAT_MODELS`, `EUROSAT_STORAGE`, `EUROSAT_CODE_DIR` and `EUROSAT_SPLITS`.
+Smoke uses two development and two test episodes for each of 1, 5 and 10 shots. Model subsets can be comma-separated. For automated runs, environment variables override the Settings cell: `EUROSAT_TARGET`, `EUROSAT_MODE`, `EUROSAT_MODELS`, `EUROSAT_POLICIES`, `EUROSAT_VIEWS`, `EUROSAT_TRIALS`, `EUROSAT_STORAGE`, `EUROSAT_CODE_DIR`, `EUROSAT_SPLITS` and `EUROSAT_REPORT_RESULTS`.
 
 ## Team Collaboration and Shared Google Drive Cache
 
-Create a Google Drive folder, share it with teammates as **Editors**, and have each person add a shortcut to it in **My Drive**. Set `STORAGE_OVERRIDE` in the notebook or configure:
+Create a Google Drive folder, share it with teammates as **Editors**, and have each person add a shortcut to it in **My Drive**. Set `STORAGE_DIR` in the notebook's Settings cell or configure:
 
 ```python
 import os

@@ -6,7 +6,7 @@ import torch
 from torch.utils.data import DataLoader
 from .preprocessing.images import Images
 from .cache import key, write_npz
-from .config import MODEL_IDS
+from .config import AUGMENTATION_DEFAULTS, AUGMENTATION_VERSIONS, MODEL_IDS
 from .models import EMBEDDING_DIMENSIONS
 from .runtime import environment, memory_usage
 
@@ -16,9 +16,12 @@ def extract(storage, root, records, dataset_id, model_name, model, device, items
     identity = {'dataset': dataset_id, 'checkpoint': MODEL_IDS[model_name],
                 'preprocess': 'rgb-bilinear224-imagenet-normalization-v1',
                 'policy': policy, 'seed': config.seed, 'versions': environment()}
-    strength = config.policy_strengths.get(policy, 1.)
-    if strength != 1.:
-        identity['strength'] = strength
+    params = config.augmentation.get(policy)
+    # Default magnitudes keep the original identity, so earlier cached views remain valid.
+    if params is not None and params != AUGMENTATION_DEFAULTS[policy]:
+        identity['augmentation'] = params
+    if policy in AUGMENTATION_VERSIONS:
+        identity['policy_version'] = AUGMENTATION_VERSIONS[policy]
     started = time.perf_counter()
     cached_chunks = computed_chunks = 0
     if device.type == 'cuda':
@@ -47,7 +50,7 @@ def extract(storage, root, records, dataset_id, model_name, model, device, items
         else:
             print(f'CACHE MISS features {model_name}/{policy}: {start}:{start + len(chunk_items)}', flush=True)
             computed_chunks += 1
-            dataset = Images(root, records, chunk_items, policy, config.seed, strength)
+            dataset = Images(root, records, chunk_items, policy, config.seed, params)
             loader = DataLoader(dataset, batch_size=config.batch_size, shuffle=False, num_workers=0)
             features, targets = [], []
             with torch.inference_mode():
@@ -66,7 +69,7 @@ def extract(storage, root, records, dataset_id, model_name, model, device, items
     if not matrices:
         raise ValueError('No images selected for feature extraction')
     if stats is not None:
-        stats.update({'model': model_name, 'policy': policy, 'strength': strength,
+        stats.update({'model': model_name, 'policy': policy, 'augmentation': params,
                       'seconds': time.perf_counter() - started, 'items': len(items),
                       'cached_chunks': cached_chunks, 'computed_chunks': computed_chunks,
                       **memory_usage(device)})
