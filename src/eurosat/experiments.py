@@ -24,6 +24,10 @@ def manifest_config(mode='smoke', models='all'):
 
 def run_manifest_benchmark(config, storage, scratch, manifest_path, target='colab_gpu', episode_limit=None, prepared=None):
     """Use committed development/test episodes with frozen backbones and a common head."""
+    config.validate()
+    if config.dino_initialization == 'scratch':
+        from .training import ScratchSettings
+        ScratchSettings.from_config(config)
     path = Path(manifest_path)
     if not path.is_file():
         raise FileNotFoundError(f'Copy the committed splits_manifest.json to shared storage: {path}')

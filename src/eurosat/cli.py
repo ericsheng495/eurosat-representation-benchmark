@@ -1,5 +1,6 @@
 """Run fixed four-class episodes, or render existing model results."""
 import argparse
+import json
 import os
 from pathlib import Path
 
@@ -10,6 +11,12 @@ def main(argv=None):
     experiment = commands.add_parser('run', help='Run or resume the manifest benchmark')
     experiment.add_argument('--mode', choices=['smoke', 'full'], default='smoke')
     experiment.add_argument('--models', nargs='+')
+    experiment.add_argument('--dino-initialization', choices=['pretrained', 'scratch'],
+                            default=os.environ.get('EUROSAT_DINO_INITIALIZATION', 'pretrained'))
+    experiment.add_argument('--scratch-epochs', type=int)
+    experiment.add_argument('--scratch-batch-size', type=int)
+    experiment.add_argument('--scratch-learning-rate', type=float)
+    experiment.add_argument('--scratch-per-class-limit', type=int)
     experiment.add_argument('--manifest', type=Path)
     experiment.add_argument('--policies', nargs='+')
     experiment.add_argument('--trials', type=int)
@@ -26,6 +33,12 @@ def main(argv=None):
 
     from .experiments import manifest_config, run_manifest_benchmark
     config = manifest_config(args.mode, args.models or os.environ.get('EUROSAT_MODELS', 'all'))
+    config.dino_initialization = args.dino_initialization
+    config.scratch_training = json.loads(os.environ.get('EUROSAT_SCRATCH_TRAINING', '{}'))
+    for name in ['epochs', 'batch_size', 'learning_rate', 'per_class_limit']:
+        value = getattr(args, 'scratch_' + name)
+        if value is not None:
+            config.scratch_training[name] = value
     for name in ['policies', 'views']:
         if getattr(args, name) is not None:
             setattr(config, name, getattr(args, name))

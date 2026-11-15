@@ -27,8 +27,18 @@ def run(config, storage, scratch, target='colab_gpu', episode_manifest=None, pre
 
     root, records, split, dataset_id = prepared.root, prepared.records, prepared.split, prepared.dataset_id
     trials, episodes, episode_source = prepared.trials, prepared.episodes, prepared.source
+    training = {}
+    if config.dino_initialization == 'scratch':
+        from .training import prepare_scratch_checkpoints
+        training = prepare_scratch_checkpoints(config, storage, scratch,
+                       episode_manifest or storage / 'splits_manifest.json', device)
+    checkpoints = {m: training[m]['checkpoint_id'] if m in training else MODEL_IDS[m] for m in config.models}
     manifest = {'config': config_dict(config), 'dataset': dataset_id, 'versions': environment(),
-                'trials': trials, 'checkpoints': {m: MODEL_IDS[m] for m in config.models}}
+                'trials': trials, 'checkpoints': checkpoints}
+    if training:
+        # Runtime-specific paths are excluded from the experiment identity for Drive sharing.
+        manifest['base_training'] = {m: {k: v for k, v in artifact.items() if k != 'path'}
+                                     for m, artifact in training.items()}
     manifest['classes'] = [CLASSES[label] for label in sorted({r['label'] for r in records})]
     manifest['episode_source'] = episode_source
     experiment = key(manifest)
@@ -68,12 +78,17 @@ def run(config, storage, scratch, target='colab_gpu', episode_manifest=None, pre
             print('Completed results reused:', model_name, flush=True)
             continue
         started = time.perf_counter()
-        model = load_backbone(model_name, device)
+        if model_name in training:
+            from .training import load_scratch_backbone
+            model = load_scratch_backbone(model_name, device, training[model_name])
+        else:
+            model = load_backbone(model_name, device)
         model_load_seconds = time.perf_counter() - started
         stage = {'stage': 'original_features', 'model_load_seconds': model_load_seconds}
         try:
             original, _ = extract(storage, root, records, dataset_id, model_name, model,
-                                   device, all_items, 'none', config, stats=stage)
+                                   device, all_items, 'none', config, stats=stage,
+                                   checkpoint_id=checkpoints[model_name])
             execution['stages'].append(stage)
             write_json(execution_path, execution)
             feature_seconds = time.perf_counter() - started
@@ -89,7 +104,8 @@ def run(config, storage, scratch, target='colab_gpu', episode_manifest=None, pre
                     items = [(i, v) for i in support_union for v in range(config.views)]
                     stage = {'stage': 'augmented_features'}
                     augmented, _ = extract(storage, root, records, dataset_id, model_name, model,
-                                           device, items, policy, config, stats=stage)
+                                           device, items, policy, config, stats=stage,
+                                           checkpoint_id=checkpoints[model_name])
                     execution['stages'].append(stage)
                     write_json(execution_path, execution)
                     aug_map = {item: j for j, item in enumerate(items)}

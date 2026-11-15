@@ -12,8 +12,8 @@ from .runtime import environment, memory_usage
 
 
 
-def extract(storage, root, records, dataset_id, model_name, model, device, items, policy, config, stats=None):
-    identity = {'dataset': dataset_id, 'checkpoint': MODEL_IDS[model_name],
+def extract(storage, root, records, dataset_id, model_name, model, device, items, policy, config, stats=None, checkpoint_id=None):
+    identity = {'dataset': dataset_id, 'checkpoint': checkpoint_id or MODEL_IDS[model_name],
                 'preprocess': 'rgb-bilinear224-imagenet-normalization-v1',
                 'policy': policy, 'seed': config.seed, 'versions': environment()}
     strength = config.policy_strengths.get(policy, 1.)

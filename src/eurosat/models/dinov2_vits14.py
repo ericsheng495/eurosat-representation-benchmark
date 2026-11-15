@@ -4,7 +4,7 @@ import torch
 from ..config import DINO_REVISION
 
 
-def build():
+def build(pretrained=True):
     os.environ['XFORMERS_DISABLED'] = '1'
     return torch.hub.load('facebookresearch/dinov2:' + DINO_REVISION,
-                          'dinov2_vits14', pretrained=True, trust_repo=True, skip_validation=True)
+                          'dinov2_vits14', pretrained=pretrained, trust_repo=True, skip_validation=True)

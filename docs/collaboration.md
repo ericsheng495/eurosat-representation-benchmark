@@ -1,6 +1,6 @@
 # Working together
 
-Use the main notebook and committed manifest for shared experiments. Each teammate can own one file in `src/eurosat/models/`: `resnet18.py`, `convnext_tiny.py`, `vit_b_16.py` or `dinov2_vits14.py`. Each adapter returns a pretrained model without its classification head; the shared loader freezes it and selects evaluation mode. Data selection, transforms, embedding normalization and classifier evaluation remain shared.
+Use the main notebook and committed manifest for shared experiments. Each teammate can own one file in `src/eurosat/models/`: `resnet18.py`, `convnext_tiny.py`, `vit_b_16.py` or `dinov2_vits14.py`. Each adapter returns a model without its classification head; only the DINOv2 adapter accepts the random-initialization toggle; the shared loader freezes it and selects evaluation mode. Data selection, transforms, embedding normalization and classifier evaluation remain shared.
 
 ## Make a change
 
@@ -26,3 +26,5 @@ python -m eurosat report /path/to/results.json
 ```
 
 Review full results before drawing conclusions. Smoke checks are not research results, and query accuracy must never choose settings.
+
+For scratch experiments, keep base-training settings and seed explicit. Share the `base-training/<plan-id>` folder and its metadata through Drive. Do not rename a scratch checkpoint as an official pretrained checkpoint; report generation records the selected-weight hash.

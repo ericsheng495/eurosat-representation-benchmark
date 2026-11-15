@@ -27,6 +27,8 @@ OPTIONAL_POLICIES = ['cutout']
 class Config:
     mode: str = 'smoke'
     data_protocol: str = 'base_novel'
+    dino_initialization: str = 'pretrained'
+    scratch_training: dict = field(default_factory=dict)
     seed: int = 42
     models: list = field(default_factory=lambda: list(MODEL_IDS))
     policies: list = field(default_factory=lambda: ['none'])
@@ -45,6 +47,12 @@ class Config:
                    trials=600, views=4, per_class_limit=None)
 
     def validate(self):
+        if self.dino_initialization not in {'pretrained', 'scratch'}:
+            raise ValueError('dino_initialization must be pretrained or scratch')
+        if self.dino_initialization == 'scratch' and 'dinov2_vits14' not in self.models:
+            raise ValueError('Scratch mode requires dinov2_vits14 in models')
+        if self.scratch_training and self.dino_initialization != 'scratch':
+            raise ValueError('scratch_training settings require dino_initialization=scratch')
         if self.data_protocol != 'base_novel':
             raise ValueError('Use the fixed base_novel manifest protocol')
         if self.mode not in {'smoke', 'full'}:
@@ -67,4 +75,9 @@ class Config:
 
 def config_dict(config):
     """Serialize the configuration used in experiment/cache identities."""
-    return asdict(config)
+    values = asdict(config)
+    if config.dino_initialization == 'pretrained':
+        # Preserve the original pretrained experiment/cache identities.
+        values.pop('dino_initialization')
+        values.pop('scratch_training')
+    return values

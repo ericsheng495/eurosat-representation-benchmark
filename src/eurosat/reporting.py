@@ -12,6 +12,12 @@ STYLE = {'font.family': 'DejaVu Sans', 'font.size': 9, 'axes.titlesize': 9,
          'pdf.fonttype': 42, 'ps.fonttype': 42, 'savefig.facecolor': 'white'}
 
 
+def _run_label(config):
+    label = 'SMOKE CHECK — execution validation' if config['mode'] == 'smoke' else 'Frozen evaluation'
+    return label + (' · DINOv2 scratch base-trained' if config.get('dino_initialization') == 'scratch'
+                    else ' · pretrained backbones')
+
+
 def save_figure(figure, output, name):
     import matplotlib.pyplot as plt
     for extension in ['png', 'pdf']:
@@ -38,7 +44,21 @@ def create_report(results, output=None):
     actual = [(r['model'], r['policy'], r['shots'], r['trial']) for r in rows]
     if len(actual) != len(expected) or set(actual) != expected:
         raise ValueError('Report needs complete, unique paired trials')
-    if set(config['models']) - MODEL_IDS.keys() or manifest['checkpoints'] != {m: MODEL_IDS[m] for m in config['models']}:
+    initialization = config.get('dino_initialization', 'pretrained')
+    if initialization == 'scratch':
+        training = manifest.get('base_training', {})
+        valid = set(training) == {'dinov2_vits14'} and 'dinov2_vits14' in config['models'] and all(
+            training[m].get('initialization') == 'random' and
+            training[m].get('architecture_source') == MODEL_IDS.get(m) and
+            training[m].get('checkpoint_id') == f'scratch-base-v1/{m}/{training[m].get("sha256")}' and
+            training[m].get('novel_images_used_for_backbone_training') == 0
+            for m in training)
+        expected_checkpoints = {m: training[m]['checkpoint_id'] if m in training else MODEL_IDS.get(m)
+                                for m in config['models']} if valid else {}
+    else:
+        valid = initialization == 'pretrained'
+        expected_checkpoints = {m: MODEL_IDS.get(m) for m in config['models']}
+    if not valid or set(config['models']) - MODEL_IDS.keys() or manifest['checkpoints'] != expected_checkpoints:
         raise ValueError('Report checkpoint identities do not match the supported backbones')
     output = Path(output) if output else source.parent / 'report'
     output.mkdir(parents=True, exist_ok=True)
@@ -73,8 +93,7 @@ def create_report(results, output=None):
                             parameters=('parameters', 'first')).reset_index())]:
         atomic(output / f'{name}.csv', lambda path, table=table: table.to_csv(path, index=False))
 
-    smoke = config['mode'] == 'smoke'
-    label = 'SMOKE CHECK — execution validation' if smoke else 'Frozen representations'
+    label = _run_label(config)
     names = ['model_by_shot', 'augmentation_gains', 'class_recall', 'confusion_matrix']
     with plt.rc_context(STYLE):
         fig, axes = plt.subplots(1, 2, figsize=(10, 3.6), layout='constrained')
@@ -228,7 +247,7 @@ def proposal_analysis(report, output):
                 'CUDA memory is a per-stage allocated peak; MPS memory is an end-of-stage allocation snapshot. '
                 'These measures are not directly interchangeable. Model loading is recorded separately.\n')
     atomic(output / 'interpretation.md', lambda p: p.write_text(finding))
-    label = 'SMOKE CHECK — execution validation' if config['mode'] == 'smoke' else 'Frozen representations'
+    label = _run_label(config)
     with plt.rc_context(STYLE):
         fig, ax = plt.subplots(figsize=(6.4, 3.6), layout='constrained')
         for model in models:
@@ -281,8 +300,7 @@ def metric_overview(report, output):
                             marker='o', capsize=2, label=model)
             ax.set(title=title, xlabel='Original images per class', ylim=(0, 1), xticks=sorted(config['shots']))
         axes[0, 0].legend(frameon=False)
-        fig.suptitle(('SMOKE CHECK — ' if config['mode'] == 'smoke' else '') +
-                     'No-augmentation model baselines; mean ± trial SD')
+        fig.suptitle(_run_label(config) + '\nNo-augmentation model baselines; mean ± trial SD')
         save_figure(fig, output, 'classification_metrics')
     return ['classification_metrics']
 
@@ -320,6 +338,7 @@ def display_model_evaluation(result, model):
         plot = ax.imshow(normalized, vmin=0, vmax=1, cmap='Blues')
         ax.set(xticks=range(4), yticks=range(4), xticklabels=classes, yticklabels=classes,
                xlabel='Predicted class', ylabel='True class', title=f'{model}: unaugmented, largest shot budget')
+        fig.suptitle(_run_label(saved['manifest']['config']), fontsize=8)
         ax.tick_params(axis='x', labelrotation=45, labelsize=7)
         ax.tick_params(axis='y', labelsize=7)
         fig.colorbar(plot, ax=ax, label='Fraction within true class')

@@ -15,6 +15,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--mode', choices=['full', 'smoke'], default='smoke')
     parser.add_argument('--models', help='Default: all four frozen backbones')
+    parser.add_argument('--dino-initialization', choices=['pretrained', 'scratch'])
     parser.add_argument('--policies')
     parser.add_argument('--trials', type=int)
     parser.add_argument('--views', type=int)
@@ -54,6 +55,8 @@ def main():
         env = dict(os.environ, EUROSAT_TARGET='local', EUROSAT_MODE=mode,
                    EUROSAT_STORAGE=os.environ.get('EUROSAT_STORAGE', str(root)), EUROSAT_MODELS=models,
                    MPLBACKEND='Agg')
+        if args.dino_initialization:
+            env['EUROSAT_DINO_INITIALIZATION'] = args.dino_initialization
         for field in ['policies', 'trials', 'views']:
             value = getattr(args, field)
             if value is not None:

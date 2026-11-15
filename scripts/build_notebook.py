@@ -18,7 +18,7 @@ def build(*, write=True):
     cells = [
         md('''# EuroSAT: four-class manifest benchmark
 
-Compare ResNet-18, ConvNeXt-Tiny, ViT-B/16 and DINOv2 on the **same fixed four-way episodes**. Six base classes are reserved; four novel classes are evaluated. Backbones stay frozen, and logistic regression is fitted on support embeddings.
+Compare ResNet-18, ConvNeXt-Tiny, ViT-B/16 and DINOv2 on the **same fixed four-way episodes**. Four novel classes are evaluated. By default, backbones use frozen pretrained weights. Optional scratch mode first trains the randomly initialized DINOv2 architecture on six base classes, then freezes it for the same logistic-regression evaluation.
 
 The workflow is: **1–2 setup → 3 inspect and validate data → 4 inspect model contracts → 5 execute → 6 inspect each model → 7 compare with ResNet**. Smoke runs verify execution; they are not research conclusions. Start in smoke mode.
 
@@ -36,6 +36,8 @@ from pathlib import Path
 TARGET = os.environ.get('EUROSAT_TARGET', 'colab_gpu')  # local for a local VS Code kernel.
 MODE = os.environ.get('EUROSAT_MODE', 'smoke')
 MODELS = os.environ.get('EUROSAT_MODELS', 'all')
+DINO_INITIALIZATION = os.environ.get('EUROSAT_DINO_INITIALIZATION', 'pretrained')  # Or scratch.
+SCRATCH_TRAINING = {}  # Optional epochs/batch_size/learning_rate/weight_decay/per_class_limit.
 STORAGE_OVERRIDE = os.environ.get('EUROSAT_STORAGE', '')
 CODE_DIR = os.environ.get('EUROSAT_CODE_DIR', '')
 MANIFEST_FILE = os.environ.get('EUROSAT_SPLITS', '')
@@ -101,6 +103,8 @@ from eurosat.evaluation import summarize
 from eurosat.runtime import check_device, environment
 
 config = manifest_config(MODE, MODELS)
+config.dino_initialization = DINO_INITIALIZATION
+config.scratch_training = json.loads(os.environ.get('EUROSAT_SCRATCH_TRAINING', '{}')) or SCRATCH_TRAINING
 if os.environ.get('EUROSAT_TRIALS'):
     config.trials = int(os.environ['EUROSAT_TRIALS'])
 if os.environ.get('EUROSAT_POLICIES'):
@@ -117,6 +121,7 @@ config.validate()
 manifest_path = Path(MANIFEST_FILE) if MANIFEST_FILE else STORAGE / 'splits_manifest.json'
 device = None if REPORT_ONLY else check_device(TARGET)
 print('Run:', config.mode, '| models:', config.models, '| shots:', config.shots)
+print('DINOv2 initialization:', config.dino_initialization)
 print('Test episodes per shot:', config.trials, '| policies:', config.policies)
 print('Software:', environment())
 '''),
@@ -142,7 +147,7 @@ else:
 
 `validate_manifest()` checks complete file coverage, unique class-pool membership, development/test isolation by filenames **and decoded pixels**, and correct support/query sizes and separation in **every committed episode**. Smoke mode does not weaken these checks.
 
-The six base classes are reserved. Novel development labels are extra selection information outside the support-shot budget. Novel test queries never choose C, augmentation settings or model checkpoints.
+In pretrained mode the six base classes are reserved. Scratch mode uses only their train/validation partitions for supervised backbone training/checkpoint selection; base test images remain untouched. Novel development labels are extra selection information outside the support-shot budget. Novel test queries never choose C, augmentation settings or model checkpoints.
 '''),
         code('''if not REPORT_ONLY:
     validated = validate_manifest(manifest_path, source)
@@ -181,20 +186,30 @@ The montage uses development **support** images from episode 0, never test image
 '''),
         md('''## 4. Model implementation map
 
-Each teammate edits one adapter in `src/eurosat/models/`. `build()` must return a pretrained network with its classification head removed. The shared loader freezes weights and sets evaluation mode; the shared feature extractor checks embedding width and finite values.
+Each teammate edits one adapter in `src/eurosat/models/`. `build()` returns a network with its classification head removed. Only the DINOv2 adapter supports random initialization; the other three keep pretrained weights. The shared loader freezes weights and sets evaluation mode; the shared feature extractor checks embedding width and finite values.
 
 Do not add private splitting, preprocessing or classifier code inside an adapter. ResNet-18 is the baseline. Updating weights or extraction semantics requires updating the checkpoint/cache identity before reusing embeddings.
 '''),
         code('''display(pd.DataFrame([{'model': name,
                        'implementation': f'src/eurosat/models/{name}.py',
                        'embedding_width': EMBEDDING_DIMENSIONS[name],
-                       'checkpoint': MODEL_IDS[name],
+                       'checkpoint': 'random → base-trained weights' if name == 'dinov2_vits14' and config.dino_initialization == 'scratch' else MODEL_IDS[name],
                        'included': name in config.models}
                       for name in MODEL_IDS]))
 '''),
+        md('''### 4.1 Optional scratch-training direction
+
+`DINO_INITIALIZATION = 'pretrained'` keeps the original frozen baseline and its caches. Set it to `'scratch'` to train the DINOv2 architecture from random weights. Choose `MODELS = 'dinov2_vits14'` for that model alone, or `'all'` to compare it with the three unchanged pretrained models.
+
+DINOv2 scratch mode downloads its source code but no DINOv2 pretrained weights. It trains all DINOv2 backbone parameters plus a temporary six-class head using only the manifest's **base train** images. **Base validation** accuracy selects the best epoch (loss breaks ties). The head is discarded, the backbone is frozen, and novel support/query evaluation stays identical. Novel development/test images never enter backbone training.
+
+This is supervised training of the ViT-S/14 architecture, not reproduction of DINOv2 self-supervised pretraining. Full defaults are 20 epochs, AdamW at 3e-4, batch size 8 and all base train/validation images. Set `SCRATCH_TRAINING` explicitly to change them. Smoke uses one epoch and two images per base class per partition; it verifies execution only. These settings are a starting point, not a tuned scratch-training recipe.
+
+Epoch checkpoints and optimizer/best states persist under `cache/weights/base-training/`. Interruptions resume after the last completed epoch; the current epoch may repeat. Reports and embeddings use the actual selected-weight checksum so scratch results cannot reuse pretrained features.
+'''),
         md('''## 5. Run or resume the four-model evaluation
 
-This call consumes the already inspected `prepared` episodes. Models execute sequentially; each is released before the next is loaded. Matching chunks and completed trials are reused. Missing classifiers use development episodes to choose C, then fit each test episode's support set and predict only its query set. No backbone training occurs.
+This call consumes the already inspected `prepared` episodes. Models execute sequentially; each is released before the next is loaded. Matching chunks and completed trials are reused. Missing classifiers use development episodes to choose C, then fit each test episode's support set and predict only its query set. Only DINOv2 scratch mode trains a backbone first; the other three models always load pretrained weights.
 
 The shared classifier is L2-regularized logistic regression on L2-normalized embeddings, with C in `[0.1, 1, 10]`. Augmentation, if enabled, is support-only with fixed strengths. JSON/CSV, numeric classifier checkpoints and timings are saved under the printed experiment directory.
 '''),
@@ -207,6 +222,13 @@ else:
                                     target=TARGET, episode_limit=config.trials, prepared=prepared)
 
 print('Saved model results:', results['output'])
+if config.dino_initialization == 'scratch':
+    training = json.loads((Path(results['output']) / 'results.json').read_text())['manifest']['base_training']
+    display(pd.DataFrame([{'model': name, 'best_epoch': row['best_epoch'],
+                           'base_val_accuracy': row['base_val_accuracy'],
+                           'base_train_images': row['base_train_images'],
+                           'checkpoint': row['checkpoint_id']}
+                          for name, row in training.items()]))
 '''),
         md('''## 6. Inspect each model
 
@@ -217,7 +239,7 @@ These cells read saved predictions and metrics; they do not rerun inference. Eac
         ('6.1 ResNet-18 — baseline', 'resnet18', 'A standard CNN. Use its paired results as the reference for the other three backbones.'),
         ('6.2 ConvNeXt-Tiny', 'convnext_tiny', 'A modern CNN. Compare it with ResNet on the same images and classifier procedure.'),
         ('6.3 ViT-B/16', 'vit_b_16', 'A supervised Vision Transformer. Its adapter returns the final class-token embedding.'),
-        ('6.4 DINOv2 ViT-S/14', 'dinov2_vits14', 'A self-supervised representation. Differences also include pretraining data and model size, not only the learning objective.'),
+        ('6.4 DINOv2 ViT-S/14', 'dinov2_vits14', 'The default is a self-supervised pretrained representation; the scratch toggle instead uses supervised base-trained ViT-S/14 weights. Differences also include training data and model size, not only the learning objective.'),
     ]:
         cells.extend([md(f'### {title}\n\n{description}'), code(f"display_model_evaluation(results, '{name}')\n")])
     cells.extend([

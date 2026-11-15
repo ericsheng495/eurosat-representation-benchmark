@@ -22,7 +22,7 @@ print(n_episodes(manifest, 'test', 5))  # 600
 
 `base_items` labels the six base classes from 0 to 5; `episode_items` labels the four novel classes from 0 to 3. Use the class order in `manifest['meta']` when interpreting labels. Development episodes are for choosing settings; use fixed test episodes only after settings are locked.
 
-The main notebook uses this fixed four-class protocol exclusively. Six base classes are reserved, and no backbone is trained on their partitions. Set `MANIFEST_FILE` or `EUROSAT_SPLITS` to the committed file, or copy it into shared storage. Every pool and episode is validated before selecting a smoke/full subset; selected records and assignments are exported for inspection.
+The main notebook uses this fixed four-class protocol exclusively. Pretrained mode reserves the six base classes. Scratch mode uses base train for supervised backbone training and base validation for checkpoint selection; base test stays untouched. Both modes use the same novel episodes. Set `MANIFEST_FILE` or `EUROSAT_SPLITS` to the committed file, or copy it into shared storage. Every pool and episode is validated before selecting a smoke/full subset; selected records and assignments are exported for inspection.
 
 Generation command used from the repository root:
 

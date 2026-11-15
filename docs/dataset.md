@@ -1,6 +1,6 @@
 # Dataset checks and inspection
 
-EuroSAT RGB contains 27,000 native 64×64 RGB tiles across ten classes. This checkout's decoded-pixel audit found zero exact duplicates and zero corrupt images. The benchmark evaluates the four novel classes defined in the [committed manifest](../SPLITS.md); the six base classes are reserved.
+EuroSAT RGB contains 27,000 native 64×64 RGB tiles across ten classes. This checkout's decoded-pixel audit found zero exact duplicates and zero corrupt images. The benchmark evaluates the four novel classes defined in the [committed manifest](../SPLITS.md); the six base classes are reserved in pretrained mode. Scratch mode uses only their train/validation partitions for backbone training and checkpoint selection.
 
 Notebook section 3 exposes the processing steps:
 
