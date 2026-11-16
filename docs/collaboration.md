@@ -17,7 +17,7 @@ python scripts/execute_notebook.py --mode smoke --models vit_b_16 --output work/
 
 ## Share artifacts
 
-Use the shared Drive setup in [README](../README.md). Keep dataset archives, weights, embeddings and generated results outside Git. Use one writer per shared experiment at a time.
+Use the single EuroSAT-Team root and access setup in [the storage guide](shared-storage.md). Upload new checkpoints into the matching model folder in `model-uploads/`, with a distinct filename, settings, class order, classifier-head details and checksum before publishing them to cache. Add completed runs to the root RUNS.csv. Keep dataset archives, weights, embeddings and generated results outside Git. Use one writer per shared experiment at a time.
 
 All-model runs automatically produce combined results. Matching caches can reuse work from individual model runs, although a different episode selection or chunk layout can require additional extraction. Compare only results with identical manifest, episode identities and evaluation settings. Share the experiment's `results.json` and provenance from Drive; regenerate its report without a GPU:
 
@@ -28,3 +28,5 @@ python -m eurosat report /path/to/results.json
 Review full results before drawing conclusions. Smoke checks are not research results, and query accuracy must never choose settings.
 
 For scratch experiments, keep base-training settings and seed explicit. Share the `base-training/<plan-id>` folder and its metadata through Drive. Do not rename a scratch checkpoint as an official pretrained checkpoint; report generation records the selected-weight hash.
+
+Folder access: Eric shares the EuroSAT-Team parent with the other three members as Editors, keeping general access Restricted. Everyone accepts using their Colab Google account and adds a My Drive shortcut. That parent permission also covers weights. See [the README](../README.md#team-collaboration-and-shared-google-drive-cache) for the exact steps.

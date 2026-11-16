@@ -116,34 +116,43 @@ Smoke uses two development and two test episodes for each of 1, 5 and 10 shots. 
 
 ## Team Collaboration and Shared Google Drive Cache
 
-Create a Google Drive folder, share it with teammates as **Editors**, and have each person add a shortcut to it in **My Drive**. Set `STORAGE_OVERRIDE` in the notebook or configure:
+Use [EuroSAT-Team](https://drive.google.com/drive/folders/1WaQ0JHRzr5GTWAj2umnMTumDF59CBFWc) as the common artifact root. GitHub stores source code; Drive stores datasets, weights, embeddings and generated results.
+
+### Share the folder once — Eric
+
+1. Open **EuroSAT-Team → Share** while signed into the Google account that owns it.
+2. Add Andrew, Eunhyeok and Yanru using the Google accounts they use in Colab; choose **Editor** and send the invitations.
+3. Keep **General access: Restricted**. Sharing the parent gives teammates access to its contents, including weights; separate links do not grant permissions by themselves.
+
+The connector cannot grant folder permissions, so the owner must do this in Drive. Confirm one teammate can open the folder and upload into `model-uploads/`. See [Google's folder-sharing instructions](https://support.google.com/drive/answer/7166529).
+
+### Connect the same folder — each teammate
+
+Accept the invitation, then use **Organize → Add shortcut → My Drive**, naming the shortcut `EuroSAT-Team`. A shortcut does not grant access; sign into the invited account. Mount Drive in Colab and set this **before notebook setup**, or put the path in `STORAGE_OVERRIDE`:
 
 ```python
 import os
 
-os.environ['EUROSAT_STORAGE'] = '/content/drive/MyDrive/EuroSATRepresentationBenchmark'
+os.environ['EUROSAT_STORAGE'] = '/content/drive/MyDrive/EuroSAT-Team'
 ```
 
-Use each member's actual shortcut path. Without an override, the notebook reuses the older personal `MyDrive/ColabNotebooks/cs7643/EuroSATLowData` folder if present, otherwise `EuroSATRepresentationBenchmark`. A personal folder is not automatically shared.
+Use the shortcut's actual path if different. If uploads are denied, confirm Editor access and the signed-in account. See [Google's shortcut instructions](https://support.google.com/drive/answer/9700156).
 
-```text
-<shared storage>/
-  splits_manifest.json      Fixed episode definitions
-  code/src/                 Source package, if no repository checkout
-  data/EuroSAT.zip          Verified archive
-  cache/data-audits/        Checks, selected records/episodes and dataset figures
-  cache/weights/            Pretrained weights and base-training checkpoints
-  cache/features/           Original and augmented embeddings
-  cache/development/        Existing development-selection cache location
-  cache/experiments/        Trial manifests, classifier selections and checkpoints
-  outputs/<experiment-id>/  results.json, summary.csv and report figures
-```
+### Upload and reuse model weights
 
-Extracted JPEGs stay in local Colab scratch storage and are restored from the ZIP after a reset. Matching features and completed trials are reused with `CACHE HIT` / `CACHE MISS` logs. Identities include dataset/checkpoint, preprocessing, augmentation settings and selected images/views.
+| File or location | What to do |
+|---|---|
+| `model-uploads/resnet18/`, `convnext_tiny/`, `vit_b_16/`, `dinov2_vits14/` | Upload new weights into the matching model folder, with settings and a checksum. |
+| `cache/weights/base-training/<plan-id>/best.pt` | Selected DINOv2 scratch backbone for feature extraction/evaluation. |
+| Same folder's `completed.json` | Keep with best.pt; records identity, metrics and SHA256. |
+| `last.pt.part001`–`004` + `resume_manifest.json` | Optional training-resume backup; reassemble only when needed. |
+| `outputs/` and root `RUNS.csv` | Find metrics, charts, logs and links to completed runs. |
 
-Use one writer per shared experiment at a time: atomic file publication does not provide a distributed Google Drive lock. GitHub stores source and the manifest; Drive stores datasets, weights, embeddings and generated artifacts.
+Use a distinct filename such as `resnet18_scratch_seed42_epoch20.pth`, plus a JSON/text note stating architecture, initialization, trained classes/class order, seed, epoch, settings, code commit, SHA256, and whether the checkpoint includes a classifier head. The model owner verifies compatibility before publishing it to cache. Uploaded files are **not automatically loaded**, and the official pretrained adapters do not automatically use a teammate's custom weights. Never overwrite an existing run or identify custom weights as official pretrained weights.
 
-To regenerate reports without a GPU or data download, set `REPORT_RESULTS` to a saved `results.json` in the notebook.
+The completed **DINOv2 scratch weights are already saved**: [checkpoint folder](https://drive.google.com/drive/folders/16HFBuvB0gFhAsjGhEMIYphSCqomOhOiL) · [training results](https://drive.google.com/drive/folders/1x1s1sGow-S-wkX9Jdwen7xNz1uyztQmZ). Use `best.pt` + `completed.json` for inference; the larger resume files are unnecessary for that. The [storage guide](docs/shared-storage.md#existing-dinov2-training) contains the exact Colab loading snippet and checksum/part-restoration steps. It loads this selected checkpoint without retraining; merely choosing scratch mode on a CUDA runtime can create a new training plan because the original run used MPS. Its **95.88% accuracy is six-base-class validation**, not novel few-shot accuracy.
+
+Coordinate one writer per artifact/cache build. Extracted JPEGs stay on local Colab disk. Older personal caches are not automatically synchronized into this root; the notebook's legacy default is a fallback until `EUROSAT_STORAGE` is set. Use `REPORT_RESULTS` to regenerate a saved report without model inference. See [the storage guide](docs/shared-storage.md) for the full layout.
 
 ## Local setup and contributions
 
