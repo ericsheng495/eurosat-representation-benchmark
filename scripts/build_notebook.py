@@ -334,25 +334,18 @@ print('Results, classifier records and development-selected policies:', results[
 
 The Part D suite uses 1-shot development labels to lock strengths, runs the primary grid, selects nine-view methods on primary development accuracy, and then evaluates the follow-up. These figures use the selected run above. The ResNet-18 baseline uses identical partitions, supports, strengths and classifier rules. No-augmentation and repeated-original controls are retained. The baseline plots use the unaugmented condition; augmentation gains pair each trial with the same original support/query images. Error bars show trial standard deviation, not a confidence interval. Policies are selected from development accuracy only. Smoke figures check execution and are not paper results.
 '''),
-        code('''report = None
-if isinstance(suite, dict):
-    report = suite.get('comparison_report') or suite.get('primary_report')
-if report is None:
-    report = create_report(Path(results['output']) / 'results.json')
+        code('''report = (suite['comparison_report'] or suite['primary_report']) if suite is not None else create_report(Path(results['output']) / 'results.json')
 for name, filename in report['figures'].items():
     display(Markdown('**' + name.replace('_', ' ').capitalize() + '**'))
     display(NotebookImage(filename=filename, width=900))
 display(pd.DataFrame(report['selected'])[['model', 'shots', 'policy', 'dev_accuracy', 'accuracy']].round(3))
 print('PNG/PDF figures, CSV tables and provenance:', report['output'])
-comparisons = suite.get('comparisons') if isinstance(suite, dict) else None
-if comparisons:
+if suite is not None:
     display(Markdown('**Proposal comparisons: labeled originals and added views**'))
-    for filename in comparisons.get('figures', {}).values():
+    for filename in suite['comparisons']['figures'].values():
         display(NotebookImage(filename=filename, width=1100))
-    comparison_output = comparisons.get('output')
-    if comparison_output:
-        display(pd.read_csv(Path(comparison_output) / 'budget-summary.csv').round(3))
-    print('Nine-view methods selected on development accuracy:', suite.get('selected_methods', []))
+    display(pd.read_csv(Path(suite['comparisons']['output']) / 'budget-summary.csv').round(3))
+    print('Nine-view methods selected on development accuracy:', suite['selected_methods'])
 classification = pd.read_csv(Path(report['output']) / 'classification-report.csv')
 display(classification[(classification.policy == 'none') & (classification.shots == max(config.shots))].round(3))
 '''),
