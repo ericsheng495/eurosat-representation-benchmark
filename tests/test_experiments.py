@@ -20,7 +20,8 @@ from eurosat.reporting import compare_budgets
 
 class MeanFeatures(torch.nn.Module):
     def forward(self, images):
-        return images.mean((2, 3))
+        means = images.mean((2, 3))
+        return means.repeat(1, 128)[:, :384]
 
 
 class ExperimentTests(unittest.TestCase):

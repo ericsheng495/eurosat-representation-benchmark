@@ -93,12 +93,12 @@ This notebook presents the dataset audit, experimental protocol and execution wo
         md('## 1. Runtime and execution scope'),
         code('''import os
 import sys
-import shutil
 import subprocess
 from pathlib import Path
+import torch
 
 TARGET = os.environ.get('EUROSAT_TARGET', 'colab_gpu')
-MODE = os.environ.get('EUROSAT_MODE', 'full')  # Full ResNet-18 + DINOv2 batch; smoke is opt-in.
+MODE = os.environ.get('EUROSAT_MODE', 'full')  # Full configured experiment; smoke is opt-in.
 ASSIGNMENT = os.environ.get('EUROSAT_ASSIGNMENT', 'convnext_tiny')
 EXPERIMENT = os.environ.get('EUROSAT_EXPERIMENT', 'part-b' if ASSIGNMENT == 'convnext_tiny' else 'part-d' if ASSIGNMENT == 'dinov2_vits14' else 'primary')
 SELECT_STRENGTHS = True  # Development-only selection before the primary grid.
@@ -108,14 +108,11 @@ NINE_VIEW_METHODS = 2  # Select methods using primary development accuracy only.
 if TARGET not in {'colab_gpu', 'local'} or MODE not in {'smoke', 'full'}:
     raise ValueError('Choose TARGET colab_gpu/local and MODE smoke/full')
 if TARGET == 'colab_gpu':
-    if not Path('/content').is_dir():
-        raise RuntimeError('Still using a local kernel. Select a Colab GPU server, then Run all.')
-    command = shutil.which('nvidia-smi')
-    gpu = subprocess.run([command, '--query-gpu=name', '--format=csv,noheader'],
-                         capture_output=True, text=True) if command else None
-    if gpu is None or gpu.returncode != 0 or not gpu.stdout.strip():
-        raise RuntimeError('This server has no NVIDIA GPU. Create a GPU server, not a TPU/CPU server.')
-    print('Colab GPU:', gpu.stdout.strip())
+    if not torch.cuda.is_available():
+        raise RuntimeError('No CUDA GPU is available. In VS Code, select Colab > New Colab '
+                           'Server > GPU > T4 > Python 3 (ipykernel), then reconnect and '
+                           'run all cells.')
+    print('CUDA GPU:', torch.cuda.get_device_name(0))
 else:
     print('Intentional local run; no cloud GPU connection is being used.')
 print('Experiment mode:', MODE)
@@ -337,18 +334,25 @@ print('Results, classifier records and development-selected policies:', results[
 
 The Part D suite uses 1-shot development labels to lock strengths, runs the primary grid, selects nine-view methods on primary development accuracy, and then evaluates the follow-up. These figures use the selected run above. The ResNet-18 baseline uses identical partitions, supports, strengths and classifier rules. No-augmentation and repeated-original controls are retained. The baseline plots use the unaugmented condition; augmentation gains pair each trial with the same original support/query images. Error bars show trial standard deviation, not a confidence interval. Policies are selected from development accuracy only. Smoke figures check execution and are not paper results.
 '''),
-        code('''report = (suite['comparison_report'] or suite['primary_report']) if suite is not None else create_report(Path(results['output']) / 'results.json')
+        code('''report = None
+if isinstance(suite, dict):
+    report = suite.get('comparison_report') or suite.get('primary_report')
+if report is None:
+    report = create_report(Path(results['output']) / 'results.json')
 for name, filename in report['figures'].items():
     display(Markdown('**' + name.replace('_', ' ').capitalize() + '**'))
     display(NotebookImage(filename=filename, width=900))
 display(pd.DataFrame(report['selected'])[['model', 'shots', 'policy', 'dev_accuracy', 'accuracy']].round(3))
 print('PNG/PDF figures, CSV tables and provenance:', report['output'])
-if suite is not None:
+comparisons = suite.get('comparisons') if isinstance(suite, dict) else None
+if comparisons:
     display(Markdown('**Proposal comparisons: labeled originals and added views**'))
-    for filename in suite['comparisons']['figures'].values():
+    for filename in comparisons.get('figures', {}).values():
         display(NotebookImage(filename=filename, width=1100))
-    display(pd.read_csv(Path(suite['comparisons']['output']) / 'budget-summary.csv').round(3))
-    print('Nine-view methods selected on development accuracy:', suite['selected_methods'])
+    comparison_output = comparisons.get('output')
+    if comparison_output:
+        display(pd.read_csv(Path(comparison_output) / 'budget-summary.csv').round(3))
+    print('Nine-view methods selected on development accuracy:', suite.get('selected_methods', []))
 classification = pd.read_csv(Path(report['output']) / 'classification-report.csv')
 display(classification[(classification.policy == 'none') & (classification.shots == max(config.shots))].round(3))
 '''),
@@ -379,7 +383,7 @@ display(classification[(classification.policy == 'none') & (classification.shots
                 'width': 360 if name == 'example_tile' else 820}}))
     notebook.metadata = {'kernelspec': {'display_name': 'Python 3', 'language': 'python', 'name': 'python3'},
                          'language_info': {'name': 'python'}, 'accelerator': 'GPU',
-                         'colab': {'gpuType': 'T4', 'provenance': []}}
+                         'colab': {'gpuType': 'A100', 'provenance': []}}
     index = next(i for i, c in enumerate(notebook.cells)
                  if 'implementation_placeholder' in c.metadata.get('tags', []))
     labels = {
@@ -405,15 +409,15 @@ display(classification[(classification.policy == 'none') & (classification.shots
     for i, cell in enumerate(notebook.cells):
         cell.id = 'cell-' + hashlib.sha256(f'{i}:{cell.source}'.encode()).hexdigest()[:12]
     destination = NOTEBOOK
-    # Preserve genuine saved execution outputs only when all code is unchanged.
+    # Preserve outputs for unchanged code cells, even when another cell is edited.
     if destination.exists():
         previous = nbf.read(destination, as_version=4)
-        old_code = [c for c in previous.cells if c.cell_type == 'code']
-        new_code = [c for c in notebook.cells if c.cell_type == 'code']
-        if [c.source for c in old_code] == [c.source for c in new_code]:
-            for old, new in zip(old_code, new_code):
-                new.outputs = old.outputs
-                new.execution_count = old.execution_count
+        previous_code = {c.id: c for c in previous.cells if c.cell_type == 'code'}
+        for cell in notebook.cells:
+            old = previous_code.get(cell.id)
+            if cell.cell_type == 'code' and old is not None and old.source == cell.source:
+                cell.outputs = old.outputs
+                cell.execution_count = old.execution_count
     nbf.validate(notebook)
     if write:
         nbf.write(notebook, destination)

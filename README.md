@@ -9,11 +9,11 @@ Native RGB support images from EuroSAT (Helber et al., 2019; Copernicus Sentinel
 ## Run in Colab
 
 1. Open the notebook linked below; it already includes the code and saved outputs.
-2. Upload `EuroSAT_Representation_Benchmark.ipynb` to Colab and choose a **GPU** runtime.
-3. Run all cells and authorize Drive. The default `MODE = 'full'` runs the complete ResNet-18 and DINOv2 suite.
+2. Upload `EuroSAT_Representation_Benchmark.ipynb` to Colab and choose an **T4 GPU** runtime.
+3. Run all cells and authorize Drive. The default assignment runs the full ConvNeXt-Tiny Part B grid; set `EUROSAT_ASSIGNMENT` and `EUROSAT_EXPERIMENT` for another workstream.
 4. Use `MODE = 'smoke'` only for a quick execution check. Each teammate can change `ASSIGNMENT` for other workstreams.
 
-In VS Code, choose **Select Another Kernel → Colab → New Colab Server → GPU → Python 3 (ipykernel)**. The runtime must have an NVIDIA GPU; selecting Python on a TPU server does not change its hardware. The notebook checks the device before downloading data. Colab allocation and account authorization happen in your own account.
+In VS Code, choose **Select Another Kernel → Colab → New Colab Server → GPU → T4 → Python 3 (ipykernel)**. The notebook checks CUDA availability rather than relying on `/content` to identify a Colab runtime. Selecting Python on a TPU server does not provide CUDA. Colab allocation and account authorization happen in your own account.
 
 Open **[EuroSAT_Representation_Benchmark.ipynb](EuroSAT_Representation_Benchmark.ipynb)** for the primary frozen-representation study. The separate **[EuroSAT_Fine_Tuning.ipynb](EuroSAT_Fine_Tuning.ipynb)** implements the optional adaptation study. The primary notebook contains the actual helper code in twelve labeled, readable cells and needs no GitHub credentials when uploaded to Colab. Saved dataset previews are visible before execution, followed by dataset tables, six figures, four labeled implementation parts with TODO checkboxes, and one selected execution cell. The same file works locally in VS Code with `TARGET = 'local'`.
 

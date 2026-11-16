@@ -1,5 +1,4 @@
 """Compute selection and software provenance."""
-from pathlib import Path
 import os
 import numpy as np
 import sklearn
@@ -16,10 +15,9 @@ def check_device(target='colab_gpu'):
     if target not in {'colab_gpu', 'local'}:
         raise ValueError('target must be colab_gpu or local')
     if target == 'colab_gpu':
-        if not Path('/content').is_dir() or not torch.cuda.is_available():
-            raise RuntimeError('Select a Colab GPU server (T4 or L4), not a local/CPU/TPU '
-                               'kernel. In VS Code: Select Another Kernel > Colab > '
-                               'New Colab Server > GPU > Python 3 (ipykernel).')
+        if not torch.cuda.is_available():
+            raise RuntimeError('No CUDA GPU is available. In VS Code: Select Another Kernel > '
+                               'Colab > New Colab Server > GPU > T4 > Python 3 (ipykernel).')
         device = torch.device('cuda')
         label = torch.cuda.get_device_name(0)
     else:

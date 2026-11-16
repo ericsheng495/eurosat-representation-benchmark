@@ -18,7 +18,8 @@ from eurosat import cache, config as settings, data, features, evaluation
 
 class MeanFeatures(nn.Module):
     def forward(self, images):
-        return images.mean((2, 3))
+        means = images.mean((2, 3))
+        return means.repeat(1, 171)[:, :512]
 
 
 class PipelineTests(unittest.TestCase):
@@ -71,6 +72,34 @@ class PipelineTests(unittest.TestCase):
             self.assertTrue(torch.equal(first, dataset[0][0]), policy)
             self.assertTrue(torch.isfinite(first).all())
 
+    def test_augmentation_rejects_invalid_policy_seed_and_strength(self):
+        from eurosat.augment import image_tensor
+        path = self.root / 'image.png'
+        Image.new('RGB', (32, 32), (80, 100, 120)).save(path)
+        for policy, seed, strength in [
+                ('unknown', 42, 1.), ('flip', 1.5, 1.), ('rotation', 42, 0.),
+                ('scale', 42, float('nan')), ('translation', 42, 2.1)]:
+            with self.subTest(policy=policy, seed=seed, strength=strength):
+                with self.assertRaises(ValueError):
+                    image_tensor(path, policy, seed, strength)
+
+    def test_geometric_features_have_expected_shape_and_bad_backbone_output_is_rejected(self):
+        from eurosat.models import extract_features
+        images = torch.zeros(2, 3, 224, 224)
+        actual = extract_features(MeanFeatures(), images, 'resnet18')
+        self.assertEqual(actual.shape, (2, 512))
+        with self.assertRaisesRegex(ValueError, '512 features'):
+            extract_features(nn.Identity(), images, 'resnet18')
+
+    def test_part_d_report_visualization_handles_missing_comparison_report(self):
+        root = Path(__file__).resolve().parents[1]
+        notebook = nbformat.read(root / 'EuroSAT_Representation_Benchmark.ipynb', as_version=4)
+        visualization = next(cell.source for cell in notebook.cells
+                             if cell.cell_type == 'code' and 'report = None' in cell.source
+                             and 'PNG/PDF figures' in cell.source)
+        self.assertIn("suite.get('comparison_report')", visualization)
+        self.assertNotIn("suite['comparison_report']", visualization)
+
     def test_pixel_duplicates_are_removed_before_splitting(self):
         records = self.images()
         archive = self.root / 'data/EuroSAT.zip'
@@ -106,7 +135,7 @@ class PipelineTests(unittest.TestCase):
         model.calls, model.fail = 0, False
         embeddings, labels = features.extract(*args)
         self.assertEqual(model.calls, 2)
-        self.assertEqual(embeddings.shape, (5, 3))
+        self.assertEqual(embeddings.shape, (5, 512))
         self.assertEqual(len(labels), 5)
         np.testing.assert_allclose(np.linalg.norm(embeddings, axis=1), 1., atol=1e-6)
         model.calls = 0
@@ -215,25 +244,20 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(path.read_bytes(), before)
 
     def test_fresh_colab_preflight_detects_gpu_and_rejects_missing_gpu(self):
-        from subprocess import CompletedProcess
         root = Path(__file__).resolve().parents[1]
         notebook = nbformat.read(root / 'EuroSAT_Representation_Benchmark.ipynb', as_version=4)
         source = next(c.source for c in notebook.cells if c.cell_type == 'code')
         # Execute with empty globals: earlier imports cannot hide missing imports.
         with patch.dict('os.environ', {'EUROSAT_TARGET': 'colab_gpu', 'EUROSAT_MODE': 'smoke'}), \
-                patch('pathlib.Path.is_dir', return_value=True), \
-                patch('shutil.which', return_value='/usr/bin/nvidia-smi'), \
-                patch('subprocess.run', return_value=CompletedProcess([], 0, 'Tesla T4\n', '')) as command:
+                patch('pathlib.Path.is_dir', return_value=False), \
+                patch('torch.cuda.is_available', return_value=True), \
+                patch('torch.cuda.get_device_name', return_value='NVIDIA A100-SXM4-40GB'):
             namespace = {}
             exec(compile(source, 'runtime-cell', 'exec'), namespace)
             self.assertEqual(namespace['TARGET'], 'colab_gpu')
-            command.assert_called_once_with(
-                ['/usr/bin/nvidia-smi', '--query-gpu=name', '--format=csv,noheader'],
-                capture_output=True, text=True)
         with patch.dict('os.environ', {'EUROSAT_TARGET': 'colab_gpu', 'EUROSAT_MODE': 'smoke'}), \
-                patch('pathlib.Path.is_dir', return_value=True), \
-                patch('shutil.which', return_value=None):
-            with self.assertRaisesRegex(RuntimeError, 'no NVIDIA GPU'):
+                patch('torch.cuda.is_available', return_value=False):
+            with self.assertRaisesRegex(RuntimeError, 'No CUDA GPU'):
                 exec(compile(source, 'runtime-cell', 'exec'), {})
 
     def test_exploration_reports_measured_counts_and_rejects_leakage(self):

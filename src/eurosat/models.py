@@ -5,6 +5,13 @@ from torch import nn
 from torchvision import models
 from .config import DINO_REVISION
 
+FEATURE_DIMENSIONS = {
+    'resnet18': 512,
+    'convnext_tiny': 768,
+    'vit_b_16': 768,
+    'dinov2_vits14': 384,
+}
+
 
 def load_backbone(name, device):
     if name == 'resnet18':
@@ -26,3 +33,20 @@ def load_backbone(name, device):
         raise ValueError('Unknown backbone: ' + name)
     model.requires_grad_(False)
     return model.to(device).eval()
+
+
+def extract_features(model, images, name):
+    """Return a checked [batch, feature] tensor from a frozen backbone."""
+    if name not in FEATURE_DIMENSIONS:
+        raise ValueError('Unknown backbone: ' + str(name))
+    features = model(images)
+    if not isinstance(features, torch.Tensor):
+        raise TypeError('Backbone output must be a torch.Tensor')
+    features = features.flatten(1)
+    expected = FEATURE_DIMENSIONS[name]
+    if features.ndim != 2 or features.shape[1] != expected:
+        raise ValueError(f'{name} must return {expected} features per image; '
+                         f'got shape {tuple(features.shape)}')
+    if features.shape[0] != images.shape[0]:
+        raise ValueError('Backbone output batch size must match its input')
+    return features

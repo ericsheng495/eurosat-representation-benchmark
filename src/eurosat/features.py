@@ -6,6 +6,7 @@ from torch.utils.data import DataLoader, Dataset
 from .augment import image_tensor
 from .cache import key, write_npz
 from .config import MODEL_IDS
+from .models import extract_features
 from .runtime import environment, memory_usage
 
 
@@ -28,6 +29,7 @@ class Images(Dataset):
 def extract(storage, root, records, dataset_id, model_name, model, device, items, policy, config, stats=None):
     identity = {'dataset': dataset_id, 'checkpoint': MODEL_IDS[model_name],
                 'preprocess': 'rgb-bilinear224-imagenet-normalization-v1',
+                'augmentation_version': 2,
                 'policy': policy, 'seed': config.seed, 'versions': environment()}
     strength = config.policy_strengths.get(policy, 1.)
     if strength != 1.:
@@ -53,7 +55,7 @@ def extract(storage, root, records, dataset_id, model_name, model, device, items
             features, targets = [], []
             with torch.inference_mode():
                 for images, y in loader:
-                    features.append(model(images.to(device)).flatten(1).float().cpu().numpy())
+                    features.append(extract_features(model, images.to(device), model_name).float().cpu().numpy())
                     targets.append(y.numpy())
             features, targets = np.concatenate(features), np.concatenate(targets)
             features /= np.maximum(np.linalg.norm(features, axis=1, keepdims=True), 1e-12)
