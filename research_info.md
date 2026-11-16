@@ -1,203 +1,209 @@
 # Research Info
 
-The current research plan for the EuroSAT few-shot benchmark. It refines the [original proposal](docs/project-proposal.pdf) with the decisions made since, and lists the steps from here to the final report.
+Research plan for the EuroSAT few-shot benchmark. Where it differs from the [original proposal](docs/project-proposal.pdf), this file is the current version (see section 6).
+
+**Status (2026-11-16):** the plan is agreed. The code and notebook still follow the previous plan. They are updated in step 2 (section 5).
 
 ## 1. Summary
 
-We compare four frozen, pretrained image backbones (two CNNs and two Vision Transformers) for satellite land-cover classification when only 1, 5 or 10 labeled images per class are available. A common logistic-regression classifier is trained on each backbone's embeddings. We then test whether augmenting the few labeled support images helps, and whether the benefit depends on the model and the number of labels.
+We test how well four image models classify satellite land cover from 1, 5 or 10 labeled images per class.
 
-## 2. Research questions
+Each model is used in three states, called baselines: untrained, ImageNet-pretrained, and pretrained then fine-tuned on satellite images. The model stays frozen during few-shot learning. Only a small classifier is trained on the labeled images.
 
-**Part A: Representations (no augmentation)**
+We run three studies, called tracks, on every model and baseline: a model comparison, all augmentations together, and each augmentation alone.
 
-| # | Question | Main evidence |
-|---|---|---|
-| A1 | How well do ImageNet-pretrained representations transfer to satellite images? | T1, F2 |
-| A2 | Does a modern CNN (ConvNeXt-T) beat a standard CNN (ResNet-18)? | F3 |
-| A3 | Do the Transformers beat the CNNs under label scarcity? | F3 |
-| A4 | Does DINOv2 (self-supervised) add value over a supervised ViT? | F3, T2 |
-| A5 | Does the ranking change from 1 to 5 to 10 shots? | F2 |
-| A6 | Which classes are hard, and for which models? | F4, F5 |
+## 2. Design at a glance
 
-**Part B: Support-image augmentation**
-
-| # | Question | Main evidence |
-|---|---|---|
-| B1 | Which augmentation methods beat no augmentation? | F6, T3 |
-| B2 | Do models benefit from different methods? | F6, T3 |
-| B3 | Are gains larger at 1-shot than at 5 or 10 shots? | F7, F6 |
-| B4 | How much of the gap to more real labels does augmentation close? | F8 |
-| B5 | Do more augmented views help further? | F9 |
-| B6 | Does a method help some classes and hurt others? | F10 |
-
-Figure and table details: [figure_n_table_sug.md](figure_n_table_sug.md).
-
-**How to compare:** comparisons within one shot budget (model vs model, method vs none) are **paired** on identical episodes. Comparisons across shot budgets (A5, B3, B4) compare **means only**, because each shot budget has its own episodes.
-
-## 3. Setup
-
-### 3.1 Data and episodes
-
-EuroSAT RGB: 27,000 Sentinel-2 tiles, 64×64 px, 10 classes. The archive is checksum-verified; the pixel audit found no exact duplicates and no corrupt images.
-
-All splits come from the committed [splits_manifest.json](splits_manifest.json) (seed 42). Nobody regenerates it.
-
-| Item | Value |
+| | |
 |---|---|
-| Evaluated classes (4) | HerbaceousVegetation, Pasture, PermanentCrop, River |
-| Reserved classes (6) | AnnualCrop, Forest, Highway, Industrial, Residential, SeaLake (not used) |
-| Development pool | 3,000 images (30% of the 4 classes) |
-| Test pool | 7,000 images (70%), disjoint from development |
-| Episode | 4-way; k support + 15 query images per class |
-| Shot budgets | k = 1, 5, 10 |
-| Episodes per shot | 100 development, 600 test |
+| Models (4) | ResNet-18, ConvNeXt-Tiny, ViT-B/16, DINO ViT-S/16 |
+| Baselines (3) | Untrained · Pretrained · Fine-tuned |
+| Tracks (3) | 1 Model comparison · 2 All augmentations · 3 Each augmentation |
+| Shots | 1, 5 or 10 labeled images per class |
+| Task | 4-way episodes, 15 query images per class |
+| Episodes | 100 development + 600 test per shot |
+| Where it runs | One local computer (RTX 5060 Ti, 16 GB). The notebook also keeps working on Colab |
 
-- Supports and queries never overlap within an episode.
-- Images can recur across episodes. For example, the 600 test episodes at 1-shot use 2,004 distinct support images, and the queries cover 6,949 of the 7,000 test images.
-- Supports are **not nested** across shot budgets: the 1-shot images are not part of the 5-shot set.
+Every track runs on all 4 × 3 = 12 backbones with the same episodes. Any two results can therefore be compared episode by episode.
 
-### 3.2 Preprocessing
+## 3. Research questions
 
-The same input pipeline for every model: RGB → bilinear resize to 224×224 → ImageNet mean/std normalization.
+**Models (track 1)**
+- Which model gives the best few-shot accuracy? Does the ranking change from 1 to 5 to 10 shots?
+- Does ConvNeXt beat ResNet? Do the Transformers beat the CNNs? Does self-supervised DINO beat the supervised ViT?
+- Evidence: T1, F2, F3. Class-level errors: F4, F5.
 
-### 3.3 Models
+**Baselines**
+- How much does ImageNet pretraining add over an untrained model?
+- How much does fine-tuning on satellite images add over pretraining alone?
+- Evidence: F11, T1.
 
-All backbones are frozen in evaluation mode with their classification heads removed. The embedding points below were verified to match the original models exactly.
+**All augmentations (track 2)**
+- Does training the classifier with augmented support images help? For which models and baselines?
+- How much of the gap to more real labels does augmentation close?
+- Evidence: F6, F7, F8.
 
-| Model | Role | Checkpoint | Embedding | Dim | Params |
-|---|---|---|---|---:|---:|
-| ResNet-18 | Standard CNN (baseline) | torchvision `IMAGENET1K_V1` | global-average-pooled features | 512 | 11.2M |
-| ConvNeXt-Tiny | Modern CNN | torchvision `IMAGENET1K_V1` | pooled features after final LayerNorm | 768 | 27.8M |
-| ViT-B/16 | Supervised Transformer | torchvision `IMAGENET1K_V1` | final normalized class token | 768 | 85.8M |
-| DINOv2 ViT-S/14 | Self-supervised Transformer | `facebookresearch/dinov2` (pinned revision) | official normalized class token | 384 | 22.1M |
+**Each augmentation (track 3)**
+- Which methods help, and which hurt? Which model–augmentation pairs work best?
+- Does a method help some classes and hurt others? Do more views help?
+- Evidence: F6, T3, F10, F9.
 
-### 3.4 Classifier and model selection
+The IDs refer to [figure_n_table_sug.md](figure_n_table_sug.md).
 
-- **Classifier:** multinomial logistic regression with L2 regularization (`lbfgs`) on L2-normalized embeddings. It is identical for every model.
-- **Choosing C:** C is picked from {0.1, 1, 10} by mean accuracy over the 100 development episodes, separately for each model × method × shot. Ties go to the smaller C.
-- **Testing:** the chosen C is locked. A classifier is fitted on each test episode's supports and scored on its queries. Test labels never choose any setting.
-- **Development labels** are extra information beyond the shot budget. We report this openly.
+## 4. Setup
 
-### 3.5 Augmentation
+### 4.1 Data
 
-The rules follow the proposal:
-- Augmentation is applied to **support images only**. Development and test queries are never augmented.
-- Augmented views **do not count as shots**.
-- Each original support image gets `VIEWS` augmented views (default 4, the proposal's main condition).
-- Every model sees **the same augmented views**: each view's random seed depends on the image, the method and the view number.
-- **`none`** is the baseline. **`repeat`** copies each original `VIEWS + 1` times: the same number of classifier rows, but no new pixels. It controls for the row-count effect.
+EuroSAT RGB: 27,000 Sentinel-2 tiles, 64×64 px, 10 classes. The split comes from the committed [splits_manifest.json](splits_manifest.json) and does not change.
 
-| Method | What it does (on the 224×224 image) | Default magnitude |
+| Use | Classes | Images |
 |---|---|---|
-| flip | Mirror left-right or top-bottom | — |
-| rotation | Turn by 90°, 180° or 270° (lossless) | — |
-| translation | Shift x and y independently | up to ±10% (±22 px) |
-| scale | Zoom in or out | ×0.8 – 1.2 |
-| brightness_contrast | Change brightness and contrast | each ×0.7 – 1.3 |
-| noise | Add Gaussian pixel noise | std 0.05 |
-| blur | Gaussian blur, kernel 5 | σ 0.1 – 1.5 px |
-| erasing | Gray square, side 10–30% of the image | fill 0.5 |
-| cutout | Black square, side 10–30% of the image | fill 0.0 |
+| Few-shot evaluation | HerbaceousVegetation, Pasture, PermanentCrop, River | 3,000 development · 7,000 test |
+| Fine-tuning | AnnualCrop, Forest, Highway, Industrial, Residential, SeaLake | 10,200 train · 3,400 val · 3,400 test |
 
-Magnitudes are fixed **before** any run. They are not tuned on test or development scores. Defaults live in `AUGMENTATION_DEFAULTS` ([config.py](src/eurosat/config.py)); the notebook's Settings cell (Section 1) shows and overrides them, and every result records the values used.
+- An episode has k support images and 15 query images per class. Supports and queries never overlap.
+- Development and test images never mix. Images can recur across episodes.
+- Each shot budget has its own episodes. The 1-shot images are not part of the 5-shot sets.
+- The four evaluated classes never appear in fine-tuning.
+- Input for every model: RGB, resized to 224×224 (bilinear), ImageNet normalization.
 
-### 3.6 Metrics and statistics
+### 4.2 Models
 
-- **Main metrics:** accuracy and Macro-F1 on test queries, averaged over the 600 episodes.
-- **Per class:** precision, recall, F1 and confusion matrices.
-- **Effects:** paired difference in percentage points (pp), such as model A − model B or method − none, on the same episodes.
-- **Uncertainty:** 95% percentile bootstrap over episodes (2,000 resamples).
-- **Reliability:** the share of episodes where an augmentation gives no gain (≤ 0).
-- **Cost:** parameters, extraction throughput, classifier fit time and peak memory.
+| Model | Type | Pretraining | Embedding | Params |
+|---|---|---|---:|---:|
+| ResNet-18 | Standard CNN | ImageNet-1K, supervised | 512 | 11.2M |
+| ConvNeXt-Tiny | Modern CNN | ImageNet-1K, supervised | 768 | 27.8M |
+| ViT-B/16 | Transformer | ImageNet-1K, supervised | 768 | 85.8M |
+| DINO ViT-S/16 | Transformer | ImageNet-1K, self-supervised (no labels) | 384 | about 21M |
 
-## 4. Research steps
+- CNN embeddings are the pooled features before the classification head. Transformer embeddings are the final normalized class token.
+- DINO ViT-S/16 replaces DINOv2, which was pretrained on a much larger dataset. All four models now share the same pretraining data.
 
-| Step | What | Settings (notebook) | Produces | Status |
-|---|---|---|---|---|
-| 0 | Lock the setup | Manifest, adapters, preprocessing, magnitudes | — | **Done** |
-| 1 | Smoke run | `MODE='smoke'`, `POLICIES` = none + one method | End-to-end check | To do |
-| 2 | Baseline run | `MODE='full'`, `POLICIES=['none']` | T1, F2–F5, T2 | To do |
-| 3 | Augmentation run | `MODE='full'`, all methods + `repeat`, `VIEWS=4` | F6, F7, F8, F10, T3 | To do |
-| 4 | View sweep | `VIEWS=1` and `9` for selected methods + `repeat` | F9, F8 (1-shot + 9 views vs 10-shot) | Needs merge code |
-| 5 | Resolve remaining items (section 9) | Rerun only what the fixes require | Final numbers | After runs |
-| 6 | Figures, tables, write-up | — | Report | After runs |
+### 4.3 Baselines
 
-Notes:
-- Step 3 includes `none`, so it can replace step 2. Running step 2 first gives early results while the costlier augmentation features are computed.
-- Embeddings are cached on the shared Drive. Use one writer per experiment at a time.
-- Choose the methods for step 4 from step 3's **development** results, not test results.
+| Baseline | Backbone weights |
+|---|---|
+| Untrained | Random (seed 42) |
+| Pretrained | ImageNet-1K |
+| Fine-tuned | ImageNet-1K, then trained further on the six fine-tuning classes |
 
-## 5. Changes from the original proposal
+Each baseline is its own model instance. No model is shared between baselines, and no backbone ever trains on development or test images.
 
-| Topic | Proposal | Now | Why / effect |
-|---|---|---|---|
-| Task | 10-way, stratified 60/20/20 image split | 4-way episodes on 4 classes; 6 classes reserved | The team shares one fixed manifest. Results cover 4 (mostly vegetation) classes, not all 10. |
-| Trials | Not specified | 600 test and 100 development episodes per shot | Stable means and CIs |
-| Support nesting | 1-shot ⊂ 5-shot ⊂ 10-shot "where possible" | Not nested; queries also differ by shot | Cross-shot comparisons (A5, B3, B4) are means, not paired |
-| Development data | 20% split for selecting settings | 100 development episodes per shot; select C and preferred method | Same episode format as test |
-| Rotation | Not specified | 90° steps only | Overhead images have no "up"; no black corners |
-| Augmentation strength | Tuned on development data | Fixed before runs; visible in the notebook's Settings cell | Simpler, no strength search |
-| Cutout | Optional | Implemented; differs from erasing only by fill color | See R5 in section 9 |
+Fine-tuning recipe, the same for every model:
+- Start from a fresh copy of the pretrained weights.
+- Train the whole backbone plus a new 6-class head on the 10,200 train images, in the same order for every model.
+- AdamW, cosine schedule, 10 epochs, batch 64, no augmentation.
+- Try learning rates 1e-5, 3e-5 and 1e-4. Keep the run and epoch with the best accuracy on the 3,400 val images.
+- Report accuracy on the 3,400 test images as a check. Then drop the 6-class head and freeze the backbone.
 
-## 6. Open issues
+### 4.4 Few-shot classifier
 
-All open issues and pending decisions are tracked in one place: [section 9](#9-to-resolve).
+- The backbone is frozen for all three baselines. Only the classifier is trained.
+- Classifier: multinomial logistic regression with L2 regularization on L2-normalized embeddings.
+- C is chosen from {0.01, 0.1, 1, 10, 100, 1000} by mean accuracy on the development episodes. It is chosen separately for each baseline, model, augmentation condition and shot. Ties go to the smaller C. A pick at 0.01 or 1000 is flagged.
+- The chosen C is then fixed. A new classifier is fitted on each test episode's supports and scored on its queries.
+- Test labels never choose any setting.
+
+### 4.5 Tracks
+
+| Track | Classifier training data, per support image | Control |
+|---|---|---|
+| 1 Model comparison | The original | — |
+| 2 All augmentations | The original + one view from each of the 8 methods (9 rows) | The original repeated 9 times |
+| 3 Each augmentation | The original + one view from one method (2 rows) | The original repeated twice |
+
+- Track 2 is exactly the eight track-3 views combined.
+- The control ("repeat") has the same number of rows but no new pixels. It separates the effect of new views from the effect of more rows.
+- View sweep (extra run): 1, 2, 4 and 8 views per image for the six methods that can make unlimited distinct views. Flip stops at 2 and rotation at 3.
+
+### 4.6 Augmentation
+
+Rules:
+- Applied to support images only. Queries are never augmented.
+- Views do not count as shots.
+- All models and baselines get the same views.
+- No black edges, no duplicate views, and every view must differ clearly from its original.
+
+| Method | What it does | Setting |
+|---|---|---|
+| flip | Mirror | left-right or top-bottom |
+| rotation | Quarter turn | 90°, 180° or 270° |
+| scale up | Zoom in on the center | ×1.1–1.3 |
+| brightness/contrast | Change both | each ×0.7–0.9 or ×1.1–1.3 |
+| noise | Gaussian pixel noise | std 0.05 |
+| blur | Gaussian blur | σ 2.5–3.5 px |
+| erasing | Gray square | side 20–30% of the image |
+| cutout | Black square | side 20–30% of the image |
+
+- Settings apply to the 224×224 input and are fixed before any run.
+- Blur, noise, erasing and cutout strengths were checked by eye on real development support images.
+- Translation, zoom-out and tilted rotation were dropped because they create black edges.
+
+### 4.7 Metrics
+
+- Accuracy and Macro-F1 on test queries, averaged over the 600 episodes.
+- Per-class recall and confusion matrices.
+- Paired differences in percentage points on the same episodes: model vs model, baseline vs baseline, augmentation vs none.
+- 95% bootstrap confidence intervals over episodes.
+- The share of episodes where an augmentation gives no gain.
+- Model size and compute cost.
+
+Two rules for reading results:
+- Comparisons across shot budgets use means only, because each shot budget has its own episodes.
+- The preferred augmentation for a baseline, model and shot is the one chosen on development episodes. The candidates are the 8 single methods and no augmentation. Its gain is then checked on test.
+
+## 5. Research steps
+
+| Step | What | Status |
+|---|---|---|
+| 1 | Agree the plan: this file and the figure plan | Figure plan is next |
+| 2 | Update the code: three baselines per model, fine-tuning, the new augmentation set, the wider C search, tidy folders, a simple notebook | To do |
+| 3 | Install GPU PyTorch on the local computer | To do |
+| 4 | Smoke run: every stage end to end on a few episodes | To do |
+| 5 | Fine-tune the four models (three learning rates each) | To do |
+| 6 | Main run: tracks 1–3 on all 12 backbones | To do |
+| 7 | View-sweep run | To do |
+| 8 | Figures, tables and write-up | To do |
+
+## 6. Changes from the original proposal
+
+| Topic | Proposal | Now |
+|---|---|---|
+| Task | 10-way, 60/20/20 image split | 4-way episodes on 4 classes; the other 6 classes are for fine-tuning |
+| Baselines | Frozen pretrained models; fine-tuning optional | Three baselines: untrained, pretrained, fine-tuned |
+| Fourth model | DINOv2 ViT-S/14 | DINO ViT-S/16, so all models are ImageNet-1K-pretrained |
+| Augmentation methods | Flip, rotation, translation, scaling, brightness/contrast, noise, blur, erasing, cutout | The same without translation; rotation in 90° steps; scaling is zoom-in only |
+| Views | Original + 4 views | One view per method; a separate view sweep |
+| Augmentation strength | Tuned on development data | Fixed before runs, after a visual check |
+| Support nesting | 1-shot inside 5-shot inside 10-shot, where possible | Not nested; cross-shot comparisons use means |
+| Classifier C | Not specified | 0.01–1000, chosen on development episodes |
 
 ## 7. Limitations
 
-- **Pretraining confounds:** the models differ in pretraining data, objective and size. ViT-B/16 vs DINOv2 does not isolate the effect of self-supervision. Our ViT-B/16 checkpoint was trained on ImageNet-1K only, which is weak for a ViT.
-- **Image reuse:** images recur across episodes, and the split is by image, not by location. CIs describe this episode set, not new regions.
-- **Scope:** 4 classes, 3 of them vegetation. Results may not hold for urban or water classes.
-- **Resolution:** 64 px tiles are upsampled to 224 px for every model.
-- **Many comparisons:** about 120 method × model × shot cells. We select on development data and report every condition, including negative ones.
+- The models differ in size (11M to 86M parameters). ViT-B/16 trained on ImageNet-1K alone is a weak ViT.
+- The untrained baseline is one random draw per model.
+- Fine-tuning uses different classes from the evaluated ones. It measures adaptation to satellite images, not knowledge of the test classes.
+- Images recur across episodes, and the split is by image, not by location. Confidence intervals describe this episode set, not new regions.
+- Only four classes are evaluated, and three of them are vegetation.
+- The 64 px tiles are upsampled to 224 px.
+- Many conditions are compared. We select on development data and report every condition, including negative results.
 
 ## 8. Where things live
 
 | What | Where |
 |---|---|
-| Run the experiments | [EuroSAT_Representation_Benchmark.ipynb](EuroSAT_Representation_Benchmark.ipynb) (built by [scripts/build_notebook.py](scripts/build_notebook.py)) |
-| Run settings and augmentation magnitudes | Notebook Section 1 (Settings); defaults in [src/eurosat/config.py](src/eurosat/config.py) |
-| Split definition | [splits_manifest.json](splits_manifest.json), [SPLITS.md](SPLITS.md) |
-| Model adapters | [src/eurosat/models/](src/eurosat/models/) |
+| Experiments | [EuroSAT_Representation_Benchmark.ipynb](EuroSAT_Representation_Benchmark.ipynb) |
+| Settings and defaults | Notebook Section 1; [src/eurosat/config.py](src/eurosat/config.py) |
+| Split | [splits_manifest.json](splits_manifest.json), [SPLITS.md](SPLITS.md) |
 | Figure and table plan | [figure_n_table_sug.md](figure_n_table_sug.md) |
-| Methods detail | [docs/methodology.md](docs/methodology.md), [docs/metrics.md](docs/metrics.md) |
+| Method details | [docs/](docs/) |
 
 ## 9. To resolve
 
-Items to settle as a team. Update **Status** (Open → Decided: …) as we agree, and move decided items to the list below.
-
-**Decided so far**
-- Split: the committed 4-way manifest; nobody regenerates it.
-- Models and checkpoints as in 3.3; embedding points verified.
-- Rotation: 90° steps only.
-- Augmentation magnitudes are fixed before runs; no automatic tuning on development data.
-
-### 9.1 Before the main runs (changes what we compute)
-
-| # | To resolve | Why it matters | Options (suggested first) | Status |
-|---|---|---|---|---|
-| R1 | Range of C for logistic regression | {0.1, 1, 10} may cut off some model's best C, which would make the model comparison unfair | **Widen to 0.01–1000 (log steps) and flag picks at the edge**; keep as is | Open |
-| R2 | Repeated views for flip and rotation | flip has 2 and rotation 3 distinct outputs, so `VIEWS=4` must repeat views. These methods then look weaker by construction | **Use distinct transforms per image**; merge them into one 8-way method (all flips × 90° turns); keep and report | Open |
-| R3 | Black borders from translation and zoom-out | Queries never have black borders, so the classifier may learn an artifact | **Reflect padding**; crop-based shift; keep | Open |
-| R4 | Blur strength | σ ≤ 1.5 px on a 3.5× upsampled image is about 0.4 original pixels, so the view is nearly a copy | **Raise σ after a visual check (F1)**; drop blur | Open |
-| R5 | Erasing vs cutout | They differ only in fill color, so comparing them adds little | **Drop cutout** (optional in the proposal); make erasing use random size, shape and fill | Open |
-| R6 | Other magnitudes (brightness/contrast, noise, scale, translation) | Defaults were set without data. Too weak gives no effect; too strong destroys the class | **Visual check on development supports, then lock**; small development sweep | Open |
-| R7 | Run ownership and schedule | One writer per experiment on the shared Drive; GPU time is limited | Assign an owner to each step in section 4 | Open |
-
-### 9.2 Before the view sweep (step 4)
-
-| # | To resolve | Why it matters | Options (suggested first) | Status |
-|---|---|---|---|---|
-| R8 | Code to merge runs with different `VIEWS` | F8 (1-shot + 9 views vs 10-shot) and F9 need several runs side by side | **Write a merge-and-report step** | Open |
-| R9 | Which methods enter the sweep | Running every method at `VIEWS` 1 and 9 is costly | **Top 2 development-selected methods per model + repeat** | Open |
-
-### 9.3 Reporting and interpretation
-
-| # | To resolve | Why it matters | Options (suggested first) | Status |
-|---|---|---|---|---|
-| R10 | Development-label accounting | The proposal promises to report development-label use; the log currently says 0 | **Report the number of distinct development images used (up to 3,000)** | Open |
-| R11 | How to show uncertainty | Current plots show SD; CIs are standard. The bootstrap ignores image reuse across episodes | **95% CI everywhere + a reuse caveat** | Open |
-| R12 | Unused reserved classes | 17,000 images (63%) are never used; reviewers may ask why only 4 classes | **State as a scope limitation**; extra evaluation on those classes | Open |
-| R13 | ViT-B/16 checkpoint | `IMAGENET1K_V1` is a weak ViT and may understate Transformers | **Keep (matches the proposal) and state the limitation**; add a stronger ViT as an extra | Open |
-| R14 | Fine-tuning extension | Optional in the proposal; costly | **Skip unless time remains** | Open |
-| R15 | Main-text figures and tables | Page limit | **T1, F2, F3, F6, F8, T3** ([figure_n_table_sug.md](figure_n_table_sug.md)) | Open |
+| # | Item | Why it matters | Status |
+|---|---|---|---|
+| 1 | Team agreement to replace DINOv2 with DINO ViT-S/16 | It changes a model named in the proposal | Open |
+| 2 | ResNet-18 code | The team has existing code to use. It is attached at step 2 | Waiting |
+| 3 | DINO ViT-S/16 checkpoint | Pin the exact version and verify the embedding point, as done for the other models | Step 2 |
+| 4 | Main-text figures and tables | Page limit; 14 items are planned | Open |
+| 5 | Development-label reporting | The proposal promises it; the log currently records 0 | Step 2 |
