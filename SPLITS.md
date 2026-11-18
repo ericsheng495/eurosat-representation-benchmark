@@ -1,33 +1,39 @@
-# Shared base/novel splits
+# Shared splits
 
-Use the committed `splits_manifest.json`; do not regenerate it separately for each teammate. It was generated once with the shared `make_splits.py` (only line endings normalized for Git; split logic unchanged) against the complete, checksum-verified EuroSAT RGB archive.
+Everyone uses the committed `splits_manifest.json`. Do not make your own. It was generated once by `make_splits.py` (seed 42) from the checksum-verified EuroSAT RGB archive.
 
-- Seed: 42.
-- Six base classes: 10,200 training, 3,400 validation and 3,400 test images (60/20/20).
-- Four novel classes: 3,000 development-pool and 7,000 test-pool images (30/70).
-- Per shot setting (1, 5, 10): 100 development episodes and 600 test episodes.
-- Each episode is four-way, with k support images and 15 query images per class. Support/query are disjoint within each episode; development and test pools are disjoint. Images can recur across episodes, and supports are not guaranteed nested across shot settings.
+| Part | Classes | Images |
+|---|---|---|
+| Fine-tuning | AnnualCrop, Forest, Highway, Industrial, Residential, SeaLake | 10,200 train · 3,400 val · 3,400 test (60/20/20) |
+| Few-shot evaluation | HerbaceousVegetation, Pasture, PermanentCrop, River | 3,000 development · 7,000 test (30/70) |
 
-Paths in the manifest are filenames relative to their class folders. Each person supplies their own image root containing all ten class folders:
+- For each shot budget (1, 5, 10): 100 development episodes and 600 test episodes.
+- An episode is 4-way: k support images and 15 query images per class. Supports and queries never overlap.
+- Development and test pools never overlap. Images can recur across episodes. Supports are not nested across shot budgets.
+- The six fine-tuning classes train only the fine-tuned baseline. The four evaluated classes never train any backbone.
+
+The notebook checks every pool and episode before it selects the episodes for a run. To use another copy of the manifest, set `MANIFEST_FILE` in the notebook (or `EUROSAT_SPLITS`).
+
+## Using the manifest outside the notebook
+
+Paths are filenames inside each class folder. Point `IMG_ROOT` at your own folder that holds all ten class folders:
 
 ```python
 from make_splits import load_manifest, base_items, episode_items, n_episodes
 
 manifest = load_manifest('splits_manifest.json')
-IMG_ROOT = '/content/EuroSAT/2750'  # Adjust to your own extracted folder.
+IMG_ROOT = '/content/EuroSAT/2750'  # your extracted folder
 train = base_items(manifest, IMG_ROOT, 'train')
 support, query = episode_items(manifest, IMG_ROOT, 'test', 5, 0)
 print(n_episodes(manifest, 'test', 5))  # 600
 ```
 
-`base_items` labels the six base classes from 0 to 5; `episode_items` labels the four novel classes from 0 to 3. Use the class order in `manifest['meta']` when interpreting labels. Development episodes are for choosing settings; use fixed test episodes only after settings are locked.
+`base_items` labels the six fine-tuning classes 0–5. `episode_items` labels the four evaluated classes 0–3. The class order is in `manifest['meta']`.
 
-The main notebook uses this fixed four-class protocol exclusively. Six base classes are reserved, and no backbone is trained on their partitions. Set `MANIFEST_FILE` or `EUROSAT_SPLITS` to the committed file, or copy it into shared storage. Every pool and episode is validated before selecting a smoke/full subset; selected records and assignments are exported for inspection.
-
-Generation command used from the repository root:
+The manifest was made with:
 
 ```sh
 python make_splits.py data/extracted/8ebea626349354c5/2750 splits_manifest.json
 ```
 
-The ZIP, image files, weights and embeddings remain outside Git; only the split definitions and loader script are shared here.
+Git stores only the manifest and `make_splits.py`. The archive, images, weights and embeddings stay outside Git.

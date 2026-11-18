@@ -14,10 +14,11 @@ from jupyter_client.kernelspec import KernelSpecManager
 def parse_args():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--mode', choices=['full', 'smoke'], default='smoke')
-    parser.add_argument('--models', help='Default: all four frozen backbones')
-    parser.add_argument('--policies')
-    parser.add_argument('--trials', type=int)
-    parser.add_argument('--views', type=int)
+    parser.add_argument('--models', help='Comma-separated; default: all four models')
+    parser.add_argument('--baselines', help='Comma-separated; default: untrained,pretrained,finetuned')
+    parser.add_argument('--tracks', help='Comma-separated; default: 1,2,3')
+    parser.add_argument('--view-sweep', choices=['true', 'false'])
+    parser.add_argument('--trials', type=int, help='test episodes per shot')
     parser.add_argument('--notebook', type=Path, help='Defaults to the generated benchmark notebook')
     parser.add_argument('--output', type=Path, help='Save outputs here; defaults to the input notebook')
     return parser.parse_args()
@@ -54,7 +55,7 @@ def main():
         env = dict(os.environ, EUROSAT_TARGET='local', EUROSAT_MODE=mode,
                    EUROSAT_STORAGE=os.environ.get('EUROSAT_STORAGE', str(root)), EUROSAT_MODELS=models,
                    MPLBACKEND='Agg')
-        for field in ['policies', 'trials', 'views']:
+        for field in ['baselines', 'tracks', 'view_sweep', 'trials']:
             value = getattr(args, field)
             if value is not None:
                 env['EUROSAT_' + field.upper()] = str(value)

@@ -4,7 +4,6 @@ from pathlib import Path
 from collections import Counter
 import hashlib
 import json
-import random
 import shutil
 import urllib.request
 import zipfile
@@ -28,23 +27,7 @@ class SourceDataset:
     audit_path: Path
 
 
-def _source_cache_id(records, seed):
-    """Retain existing feature identifiers; these legacy hash fields do not assign episodes."""
-    rng = random.Random(seed)
-    fields = {'support': [], 'dev': [], 'test': []}
-
-    for label in range(len(CLASSES)):
-        indices = [i for i, row in enumerate(records) if row['label'] == label]
-        rng.shuffle(indices)
-        first, second = int(len(indices) * .6), int(len(indices) * .2)
-        fields['support'].extend(indices[:first])
-        fields['dev'].extend(indices[first:first + second])
-        fields['test'].extend(indices[first + second:])
-
-    return key({'records': records, 'split': fields})
-
-
-def load_source(storage, scratch, seed=42):
+def load_source(storage, scratch):
     """Verify the ZIP and extracted bytes; reuse the decoded-pixel audit when valid."""
     storage = prepare_storage(storage)
     archive = storage / 'data/EuroSAT.zip'
@@ -135,5 +118,5 @@ def load_source(storage, scratch, seed=42):
     print(f'Source audit: {len(images):,} files verified; {repaired} restored; '
           f'{len(audit["duplicates"])} exact-pixel duplicates', flush=True)
 
-    return SourceDataset(root, records, archive_id, _source_cache_id(records, seed),
+    return SourceDataset(root, records, archive_id, key({'archive': archive_id, 'records': records}),
                          inventory, audit['properties'], integrity, audit_path)

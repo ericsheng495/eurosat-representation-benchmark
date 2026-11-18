@@ -37,14 +37,15 @@ def check_device(target='colab_gpu'):
 def memory_usage(device):
     """Record practical memory measurements with explicit units and scope."""
     import sys
-    try:
-        import resource
-    except ImportError:
-        return {}
-    usage = {'process_peak_rss_bytes': int(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
-                                          * (1 if sys.platform == 'darwin' else 1024))}
+    usage = {}
     if device.type == 'cuda':
         usage['cuda_peak_allocated_bytes'] = torch.cuda.max_memory_allocated(device)
     elif device.type == 'mps':
         usage['mps_current_allocated_bytes'] = torch.mps.current_allocated_memory()
+    try:  # Not available on Windows.
+        import resource
+    except ImportError:
+        return usage
+    usage['process_peak_rss_bytes'] = int(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+                                          * (1 if sys.platform == 'darwin' else 1024))
     return usage
