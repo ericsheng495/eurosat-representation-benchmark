@@ -1,4 +1,6 @@
-# Exact Torch/Torchvision pair verified on this Mac. Colab retains its CUDA build.
-torch==2.8.0
-torchvision==0.23.0
+# Local install. Tested on Windows with an RTX 5060 Ti in the conda env "eurosat" (Python 3.11+).
+# 1. Install the GPU build of PyTorch first. PyPI's Windows wheels are CPU-only. Tested pair, CUDA 13.2:
+#      pip install torch==2.15.0 torchvision==0.29.2 --index-url https://download.pytorch.org/whl/cu132
+# 2. Then install the project with the notebook tools:
+#      pip install -r requirements/local.txt
 -e .[notebook]

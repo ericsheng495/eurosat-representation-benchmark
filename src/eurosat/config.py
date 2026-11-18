@@ -37,8 +37,9 @@ BASELINE_LABELS = {'untrained': 'Untrained', 'pretrained': 'Pretrained', 'finetu
 UNTRAINED_SEED = 42
 # Fine-tuned weights live in shared storage (not in Git), under this folder.
 FINETUNED_WEIGHTS_DIR = 'cache/weights/finetuned'
-# Classifier C candidates, chosen on development episodes.
-CLASSIFIER_CS = [0.01, 0.1, 1.0, 10.0, 100.0, 1000.0]
+# Classifier C candidates, chosen on development episodes. One per decade, 1e-3 to 1e6: on development
+# episodes, accuracy peaks near 1000 and falls on both sides well before these ends.
+CLASSIFIER_CS = [0.001, 0.01, 0.1, 1.0, 10.0, 100.0, 1000.0, 1e4, 1e5, 1e6]
 
 # ---------------------------------------------------------------------------
 # Augmentation: the single place that defines the 8 methods and how strong each one is.

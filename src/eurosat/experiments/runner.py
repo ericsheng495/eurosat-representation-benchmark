@@ -4,9 +4,11 @@ For each backbone (baseline x model):
   1. skip it if every result group is already saved (the model is not even loaded)
   2. compute or load embeddings: originals for all selected images, augmented views for support images only
   3. for each condition and shot: choose C on development episodes, score the test episodes, save one file
-  4. save its compute cost to <run>/costs/, so a resumed or repeated run keeps it
-At the end, results.json lists every group with its key numbers, the costs and how many labels each role used;
-per-episode confusion matrices stay in the group files.
+  4. save its compute cost to <run>/costs/, so a resumed or repeated run keeps it. The embedding part is also
+     kept per backbone in cache/costs/, so a run that reuses saved embeddings still reports their cost
+Then, per backbone, the many-label check (feature_check.py) on the saved original-image embeddings.
+At the end, results.json lists every group with its key numbers, the many-label checks, the costs and how many
+labels each role used; per-episode confusion matrices stay in the group files.
 """
 from dataclasses import asdict
 from datetime import datetime, timezone
@@ -27,6 +29,9 @@ from ..training import finetuned_weights_dir
 from .classifier import evaluate_condition
 from .conditions import build_conditions, needed_views
 from .embeddings import PREPROCESS, EmbeddingStore
+from .feature_check import FOLDS, feature_check
+
+EMBEDDING_COST = ['parameters', 'computed_images', 'computed_seconds', 'load_seconds', 'embedding_memory']
 
 
 def support_images(episodes, shots):
@@ -114,6 +119,12 @@ def run(config, storage, scratch, manifest_path, prepared, target='local', devic
             store.release()
             cost = {'baseline': baseline, 'model': model, 'parameters': parameters, **store.stats,
                     'embedding_memory': memory_usage(device), 'fit_seconds': 0.0, 'fits': 0}
+            # Embedding cost is kept per backbone, so a run that only reuses saved embeddings still reports it (T2).
+            embedding_cost = storage / 'cache/costs' / f'{key(backbone)}.json'
+            if store.stats['computed_images']:
+                write_json(embedding_cost, {name: cost[name] for name in EMBEDDING_COST if name in cost})
+            elif embedding_cost.is_file():
+                cost.update(json.loads(embedding_cost.read_text()), embedding_cost='measured in an earlier run')
             print(f'  embeddings: {len(arrays)} sets ({store.stats["cached_sets"]} reused), '
                   f'{store.stats["computed_images"]:,} images computed in {time.perf_counter() - started:.0f}s', flush=True)
 
@@ -127,6 +138,25 @@ def run(config, storage, scratch, manifest_path, prepared, target='local', devic
             cost['total_seconds'] = time.perf_counter() - started
             write_json(output / 'costs' / f'{baseline}_{model}.json', cost)
             del original, views
+
+        checks, started, computed = [], time.perf_counter(), 0
+        for (baseline, model), backbone in zip(pairs, backbones):
+            identity = {'check': 'many-label', 'backbone': backbone, 'dataset': prepared.dataset_id,
+                        'selection': prepared.selection_id, 'cs': sorted(config.classifier_cs), 'folds': FOLDS,
+                        'seed': config.seed, 'preprocess': PREPROCESS}
+            path = storage / 'cache/results' / f'{key(identity)}.json'
+            if not path.is_file():
+                store = EmbeddingStore(storage, backbone, model,
+                                       lambda m=model, b=baseline: load_backbone(m, device, b, weights_dir),
+                                       prepared, config, device)
+                original = store.get_many([(np.arange(len(records)), 'none', 0)])[0]  # Saved by the groups above.
+                store.release()
+                write_json(path, {'baseline': baseline, 'model': model, **feature_check(
+                    parallel, original, labels, prepared.split, config.classifier_cs, config.seed)})
+                computed += 1
+            checks.append(json.loads(path.read_text()))
+        print(f'\nMany-label check: {len(checks)} backbones ({len(checks) - computed} saved earlier) '
+              f'in {time.perf_counter() - started:.0f}s', flush=True)
     get_reusable_executor().shutdown(wait=True)  # Stop the parallel workers so no process outlives the run.
 
     for entry in groups:  # Key numbers for every group, including those saved by earlier runs.
@@ -141,7 +171,7 @@ def run(config, storage, scratch, manifest_path, prepared, target='local', devic
     results = {'config': config_dict(config), 'run_id': run_id, 'dataset_id': prepared.dataset_id,
                'selection_id': prepared.selection_id, 'episode_source': prepared.source,
                'classes': [CLASSES[label] for label in label_order], 'backbones': backbones,
-               'groups': groups, 'labels': label_usage(episodes, config.shots),
+               'groups': groups, 'feature_checks': checks, 'labels': label_usage(episodes, config.shots),
                'costs': [json.loads(path.read_text()) for path in cost_files if path.is_file()],
                'environment': environment(), 'device': str(device),
                'hardware': torch.cuda.get_device_name(0) if device.type == 'cuda' else str(device),

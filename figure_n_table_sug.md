@@ -1,149 +1,130 @@
-# Figure and Table Plan
+# Figures and Tables
 
-The 15 figures and tables for the final report. The experiment design is in [research_info.md](research_info.md).
+The 16 figures and tables for the final report. The experiment itself is described in [research_info.md](research_info.md).
 
-All 15 are built from a run's results by `src/eurosat/reporting/` (notebook Sections 6–8) and saved to `<storage>/outputs/<run>/report/`: figures as PNG and PDF, tables as CSV. An item the run cannot support (for example F3 without a model pair) is skipped with the reason. Example layouts: [docs/figure_examples.pdf](docs/figure_examples.pdf).
-
-For each item:
-- **What:** the kind of figure or table.
-- **Contains:** what is plotted or listed.
-- **Why:** the question it answers.
-- **Where:** the report section and placement.
+- All 16 are made automatically from one full run and the fine-tuning records. They are saved to `outputs/<run>/report/`: figures as PNG and PDF, tables as CSV.
+- 8 items go in the main text. The other 8 are supplementary.
+- The notebook shows main items by default and supplementary items with `SHOW_DETAILS = True`. T4 is always shown in Section 8.
+- If a run cannot support an item, the item is skipped and the reason is given.
 
 ## Overview
 
-| ID | Title | Kind | Report section | Placement | Data from |
-|---|---|---|---|---|---|
-| F1 | Augmented support views | Image grid | Methods | Supp. | No run needed |
-| T2 | Models and fine-tuning | Table | Methods | Supp. | Fine-tuning + main run |
-| T4 | Labels used | Table | Methods | Supp. | Main run |
-| T1 | Main results | Table | Results: models | **Main** | Main run |
-| F2 | Few-shot curves | Line chart | Results: models | **Main** | Main run |
-| F3 | Paired model differences | Forest plot | Results: models | **Main** | Main run |
-| F4 | Per-class recall | Heatmap | Results: models | Supp. | Main run |
-| F5 | Confusion matrices | Matrix grid | Results: models | Supp. | Main run |
-| F11 | Baseline effects | Forest plot | Results: baselines | **Main** | Main run |
-| F6 | Augmentation gains | Heatmap | Results: augmentation | **Main** | Main run |
-| F7 | All-augmentation gain by shot | Line chart | Results: augmentation | Supp. | Main run |
-| F8 | Label-gap closure | Dot plot | Results: augmentation | **Main** | Main run |
-| T3 | Preferred augmentation | Table | Results: augmentation | **Main** | Main run |
-| F9 | Number of views | Line chart | Results: augmentation | Supp. | View-sweep run |
-| F10 | Class-level augmentation effects | Heatmap | Results: augmentation | Supp. | Main run |
+| ID | Title | Kind | Placement | Question it answers |
+|---|---|---|---|---|
+| **Methods** | | | | |
+| F1 | Augmented support views | Image grid | Supp. | What do the augmented images look like? |
+| T2 | Models and fine-tuning | Table | Supp. | How big and costly is each model, and did fine-tuning work? |
+| T4 | Labels used | Table | Supp. | How many labels does each role use? |
+| **Results: models and baselines** (notebook Section 6) | | | | |
+| T1 | Main results | Table | **Main** | Which model and baseline is most accurate at each shot? |
+| T5 | Many-label check | Table | **Main** | Why does fine-tuned score below pretrained? |
+| F2 | Few-shot curves | Line chart | **Main** | Does the model ranking change with more labels? |
+| F3 | Paired model differences | Forest plot | **Main** | Is one model reliably better than another? |
+| F4 | Per-class recall | Heatmap | Supp. | Which classes are hard, and for which model? |
+| F5 | Confusion matrices | Matrix grid | Supp. | Which classes get mixed up? |
+| F11 | Baseline effects | Forest plot | **Main** | What do pretraining and fine-tuning each add? |
+| **Results: augmentation** (notebook Section 7) | | | | |
+| F6 | Augmentation gains | Heatmap | **Main** | Which methods help, for which model, baseline and shot? |
+| F7 | All-augmentation gain by shot | Line chart | Supp. | Does augmentation matter most with the fewest labels? |
+| F8 | Label-gap closure | Dot plot | **Main** | How many real labels is augmentation worth? |
+| T3 | Preferred augmentation | Table | **Main** | Which method is best for each model, chosen without test data? |
+| F9 | Number of views | Line chart | Supp. | Do more views keep helping? |
+| F10 | Class-level augmentation effects | Heatmap | Supp. | Does a method help one class and hurt another? |
 
-Main text: T1, F2, F3, F11, F6, F8, T3. The other eight are supplementary.
+## How to read them
 
-## Conventions
-
-- Baselines are always named and ordered Untrained, Pretrained, Fine-tuned. A figure with baselines has one panel per baseline, in that order.
-- Each model keeps one color in every figure.
-- Uncertainty is a 95% confidence interval (bootstrap over episodes).
-- "pp" means percentage points. A change from 70% to 75% is +5 pp.
-- "Paired" means compared on the same episodes. Results from different shot budgets are compared by means only.
+- Baselines always appear in the order Untrained, Pretrained, Fine-tuned. A figure with baselines has one panel per baseline.
+- Each model keeps the same color in every figure.
+- Error bars and brackets are 95% confidence intervals (bootstrap over test episodes).
+- "pp" means percentage points: 70% → 75% is +5 pp.
+- "Paired" means compared on the same episodes. A paired difference whose interval does not cross 0 is reliable.
+- Different shot budgets use different episodes, so they are compared by means only.
+- Chance accuracy is 25% (4 classes).
 
 ---
 
 ## Methods
 
 ### F1 · Augmented support views
-- **What:** an image grid.
-- **Contains:** one development support image per class (4 rows). Columns: the original, then one view from each of the 8 methods at its setting.
-- **Why:** to show that every view stays recognizable, has no black edges, and differs clearly from its original.
-- **Where:** Methods, augmentation. Supplementary.
+- **Shows:** one development support image per class (rows). Columns: the original, then one view from each of the 8 methods.
+- **Purpose:** to show that every view stays recognizable, has no black edges, and differs clearly from its original.
 
 ### T2 · Models and fine-tuning
-- **What:** a table, one row per model.
-- **Contains:** type, pretraining data, parameters, embedding size. Compute cost of the pretrained backbone: embedding speed (images per second, loading and augmentation included), total classifier fitting time, and peak GPU memory. For fine-tuning: the chosen learning rate, 6-class val and test accuracy, and training time.
-- **Why:** to give the context for reading model differences (size and cost), and to check that fine-tuning worked.
-- **Where:** Methods, models and baselines. Supplementary.
-- **Note:** times are wall-clock on one computer (RTX 5060 Ti, 8-core CPU). Classifier fits run in parallel on all CPU cores.
+- **Shows:** one row per model. Type, pretraining, parameters and embedding size. Cost: embedding speed (images per second), classifier fitting time and peak GPU memory. Fine-tuning: chosen learning rate, 6-class val and test accuracy, training time.
+- **Purpose:** context for model differences, and a check that fine-tuning worked.
+- **Read it:** times are wall-clock on one computer (RTX 5060 Ti, 8-core CPU).
 
 ### T4 · Labels used
-- **What:** a table, one row per shot budget, plus all shots and fine-tuning.
-- **Contains:** labeled images by role. Train: the support images that fit each test classifier (the shot budget). Choose settings: the distinct development images that choose C and the preferred augmentation. Score only: the distinct test query images. The fine-tuning row lists its train, val and test images.
-- **Why:** the proposal promises to report development labels separately from the shot budget. A 1-shot result uses 4 labels to train, but more labels to choose its settings.
-- **Where:** Methods, evaluation protocol. Supplementary. Notebook Section 8.
+- **Shows:** one row per shot budget, plus all shots and fine-tuning. Three columns of labeled images: those that train each classifier (the shot budget), those that only choose settings (development), and those that only score (test).
+- **Purpose:** the proposal promises to report development labels apart from the shot budget. A 1-shot classifier trains on 4 labels, but its settings are chosen with many more.
 
-## Results: models (track 1)
+## Results: models and baselines
 
 ### T1 · Main results
-- **What:** a table, one row per model and baseline (12 rows).
-- **Contains:** accuracy at 1, 5 and 10 shots, as mean [95% CI], with Macro-F1 in the next column. No augmentation. Chance is 25%.
-- **Why:** the headline numbers. It shows which model and baseline is best at each shot.
-- **Where:** Results, first table. Main.
-- **Note:** a high mean can hide a weak class. See F4.
+- **Shows:** one row per baseline and model (12 rows). Accuracy at 1, 5 and 10 shots as mean [95% CI], each with Macro-F1. No augmentation.
+- **Purpose:** the headline numbers.
+- **Read it:** a high mean can hide a weak class (see F4).
+
+### T5 · Many-label check
+- **Shows:** the same 12 rows. Next to 10-shot accuracy from T1, three checks on the embeddings, with no augmentation:
+  - accuracy when the classifier trains on all development images (about 750 per class) and is scored on all test images. C is chosen by 5-fold cross-validation inside the development images.
+  - effective dimensions: how many directions the embeddings really use.
+  - the share of variance in the top 5 directions. A six-class head needs exactly five.
+- **Purpose:** T1 shows fine-tuned well below pretrained. T5 shows whether fine-tuning lost the information or only made it hard to find.
+- **Read it:** read the accuracy and the dimensions together.
+  - In the first run, fine-tuned embeddings used about 5 directions, against 20–36 for pretrained. Yet with many labels, fine-tuned was about as accurate as pretrained. The information is still there, but 1–10 labels cannot find it.
+  - Untrained embeddings also used very few directions, but stayed weak with many labels. Their information is missing.
+  - A separate check confirmed that the fine-tuned weights load correctly.
 
 ### F2 · Few-shot curves
-- **What:** a line chart, one panel per baseline.
-- **Contains:** accuracy against shots (1, 5, 10). One line per model, a 95% CI band, and a chance line at 25%.
-- **Why:** to show whether the model ranking changes with more labels, and whether it differs between baselines.
-- **Where:** Results, models. Main.
+- **Shows:** accuracy against shots (1, 5, 10), one panel per baseline. One line per model with a 95% CI band, and a chance line.
+- **Purpose:** to see whether the model ranking changes with more labels, and whether it differs between baselines.
 
 ### F3 · Paired model differences
-- **What:** a forest plot (points with CI bars), one panel per baseline.
-- **Contains:** three comparisons at each shot: ConvNeXt − ResNet, DINO − ViT-B/16, and Transformers − CNNs. Each point is the mean paired difference in pp.
-- **Why:** the test behind "model A beats model B". These are the proposal's three comparisons.
-- **Where:** Results, models. Main.
-- **Note:** a bar that does not cross 0 means a reliable difference. Transformers − CNNs can be driven by one strong model, so read it with the other two rows.
+- **Shows:** one panel per baseline. At each shot: ConvNeXt − ResNet, DINO − ViT-B/16, and Transformers − CNNs, as mean paired differences in pp.
+- **Purpose:** the test behind "model A beats model B". These are the proposal's three comparisons.
+- **Read it:** one strong model can drive Transformers − CNNs, so read it with the other two rows.
 
 ### F4 · Per-class recall
-- **What:** a heatmap, one panel per baseline.
-- **Contains:** rows are models. Columns are the four classes at 1, 5 and 10 shots. Each cell is mean recall. No augmentation.
-- **Why:** to show which classes are hard, and for which model.
-- **Where:** Results, error analysis. Supplementary.
+- **Shows:** one panel per baseline. Rows: models. Columns: the four classes at 1, 5 and 10 shots. Cells: mean recall. No augmentation.
+- **Purpose:** to find the hard classes, and the models that struggle with them.
 
 ### F5 · Confusion matrices
-- **What:** a grid of 4×4 matrices: one row per model, one column per baseline (12 matrices).
-- **Contains:** true class against predicted class at 10 shots. Each cell is the share of the true class.
-- **Why:** to show which classes get mixed up, such as HerbaceousVegetation and Pasture.
-- **Where:** Results, error analysis. Supplementary.
-
-## Results: baselines
+- **Shows:** a 4×4 matrix for each model and baseline (12), at 10 shots. Each row is one true class, split by the label it received (shares).
+- **Purpose:** to see which classes get mixed up, such as HerbaceousVegetation and Pasture.
 
 ### F11 · Baseline effects
-- **What:** a forest plot with two panels.
-- **Contains:** left panel: Pretrained − Untrained. Right panel: Fine-tuned − Pretrained. Rows are model × shot. Each point is the mean paired difference in pp with a 95% CI.
-- **Why:** to measure what each training stage adds: ImageNet pretraining first, then fine-tuning on satellite images. This is the main result of the three-baseline design.
-- **Where:** Results, baselines. Main.
+- **Shows:** two panels. Left: Pretrained − Untrained. Right: Fine-tuned − Pretrained. Rows: model × shot. Mean paired differences in pp.
+- **Purpose:** to measure what each training stage adds. This is the main result of the three-baseline design.
+- **Read it:** the two panels have different scales. T5 explains the right panel.
 
-## Results: augmentation (tracks 2 and 3)
+## Results: augmentation
 
 ### F6 · Augmentation gains
-- **What:** a heatmap, one panel per baseline.
-- **Contains:** rows: all augmentations together (track 2), each of the 8 methods (track 3), and the two repeat controls. Columns: model × shot. Each cell is the paired accuracy gain over no augmentation, in pp. Bold means the CI excludes 0.
-- **Why:** one view of both augmentation tracks. It shows which methods help, for which model, baseline and shot.
-- **Where:** Results, augmentation. Main.
-- **Note:** the repeat rows should be near 0. With about 130 cells per panel, a few will be bold by chance, so look for consistent patterns.
+- **Shows:** one panel per baseline. Rows: all augmentations (track 2), each of the 8 methods (track 3), and the two repeat controls. Columns: model × shot. Cells: paired accuracy gain over no augmentation, in pp. Bold means the interval excludes 0.
+- **Purpose:** one view of both augmentation tracks.
+- **Read it:** the repeat rows should be near 0. With about 130 cells per panel, a few are bold by chance, so look for consistent patterns.
 
 ### F7 · All-augmentation gain by shot
-- **What:** a line chart, one panel per baseline.
-- **Contains:** the track-2 gain over no augmentation, in pp, against shots. One line per model, with 95% CI bars and a zero line.
-- **Why:** to show whether augmentation matters most when labels are scarcest.
-- **Where:** Results, track 2. Supplementary.
+- **Shows:** the track-2 gain over no augmentation against shots, one panel per baseline, one line per model.
+- **Purpose:** to see whether augmentation matters most when labels are scarcest.
 
 ### F8 · Label-gap closure
-- **What:** a dot plot, one panel per baseline, one row per model.
-- **Contains:** four accuracy points: 1-shot, 1-shot with all augmentations, 5-shot, and 10-shot. A label gives the share of the 1-shot to 5-shot gap that augmentation closes.
-- **Why:** to express the value of augmentation in terms of real labels.
-- **Where:** Results, track 2. Main.
-- **Note:** shot budgets use different episodes, so these are means, not paired differences.
+- **Shows:** one panel per baseline, one row per model. Four accuracy points: 1-shot, 1-shot with all augmentations, 5-shot and 10-shot. A label gives the share of the 1-shot to 5-shot gap that augmentation closes.
+- **Purpose:** to express the value of augmentation in real labels.
+- **Read it:** these are means over different episodes, not paired differences.
 
 ### T3 · Preferred augmentation
-- **What:** a table, one row per baseline, model and shot (36 rows).
-- **Contains:** the method chosen on development episodes, its development gain, its test gain as mean [95% CI], and the share of test episodes with no gain.
-- **Why:** to answer which model–augmentation pair works best, without choosing on test data. It also shows when augmentation fails.
-- **Where:** Results, track 3. Main.
-- **Note:** candidates are the 8 single methods and "none". Track 2 and the repeat controls are not candidates.
+- **Shows:** one row per baseline, model and shot (36 rows). The method chosen on development episodes, its development gain, its test gain as mean [95% CI], and the share of test episodes with no gain.
+- **Purpose:** to name the best method for each model without choosing on test data, and to show when augmentation fails.
+- **Read it:** the candidates are the 8 single methods and "none".
 
 ### F9 · Number of views
-- **What:** a line chart, one panel per baseline.
-- **Contains:** gain over no augmentation at 1-shot, averaged over the four models, against views per support image (1, 2, 4, 8). One line per method, plus a gray repeat line with the same number of rows. Flip stops at 2 views and rotation at 3.
-- **Why:** to show whether more views keep helping.
-- **Where:** Results, track 3. Supplementary.
-- **Note:** the gap between a method and the repeat line is the benefit of new views.
+- **Shows:** one panel per baseline. The 1-shot gain over no augmentation, averaged over the models, against 1, 2, 4 and 8 views per support image. One line per method, plus a gray repeat line with the same number of rows.
+- **Purpose:** to see whether more views keep helping.
+- **Read it:** the gap between a method and the repeat line is the value of new pixels. Flip stops at 2 views and rotation at 3.
 
 ### F10 · Class-level augmentation effects
-- **What:** a heatmap, one panel per baseline.
-- **Contains:** rows: all augmentations together and each of the 8 methods. Columns: the four classes. Each cell is the recall change over no augmentation at 1-shot, in pp, averaged over the four models.
-- **Why:** to show trade-offs that the average hides. A method can help one class and hurt another.
-- **Where:** Results, augmentation. Supplementary.
-- **Note:** these values are noisy. Treat single cells as hypotheses.
+- **Shows:** one panel per baseline. Rows: all augmentations and each of the 8 methods. Columns: the four classes. Cells: the 1-shot recall change over no augmentation, in pp, averaged over the models.
+- **Purpose:** to show trade-offs that the average hides.
+- **Read it:** single cells are noisy. Treat them as hypotheses.

@@ -1,4 +1,4 @@
-"""The report tables T1-T4 (figure_n_table_sug.md). Each returns (table to read, numbers for CSV)."""
+"""The report tables T1-T5 (figure_n_table_sug.md). Each returns (table to read, numbers for CSV)."""
 import json
 
 import pandas as pd
@@ -34,6 +34,33 @@ def t1_main_results(results):
                     row[f'{shot}-shot Macro-F1 (%)'] = f'{r.macro_f1:.1f}'
             rows.append(row)
     return pd.DataFrame(rows).set_index(['Baseline', 'Model']), numbers
+
+
+def t5_many_label_check(results):
+    """Few labels against all development labels, and how many directions the embeddings use."""
+    checks = results.meta.get('feature_checks')
+    if not checks:
+        raise MissingData('needs a results file with the many-label check (rerun Section 5)')
+    shot = max(shots_in(results))
+    few = results.summary()
+    few = few[(few.condition == 'none') & (few.shots == shot)].set_index(['baseline', 'model'])
+    top, train = checks[0]['top_directions'], checks[0]['train_images']
+    rows, numbers = [], []
+    for baseline in baselines_in(results):
+        for model in models_in(results):
+            check = next((c for c in checks if c['baseline'] == baseline and c['model'] == model), None)
+            if check is None:
+                continue
+            r = few.loc[(baseline, model)] if (baseline, model) in few.index else None
+            numbers.append({'baseline': baseline, 'model': model, 'shots': shot,
+                            'few_shot_accuracy': r['mean'] if r is not None else None,
+                            **{k: v for k, v in check.items() if k not in ('baseline', 'model') and not isinstance(v, list)}})
+            rows.append({'Baseline': BASELINE_LABELS[baseline], 'Model': MODEL_LABELS[model],
+                         f'{shot}-shot accuracy (%)': _interval(r['mean'], r.ci_low, r.ci_high) if r is not None else '—',
+                         f'All {train:,} development labels (%)': f'{check["probe_accuracy"] * 100:.1f}',
+                         'Effective dimensions': f'{check["effective_dimensions"]:.1f}',
+                         f'Variance in top {top} directions (%)': f'{check["top_variance_share"] * 100:.0f}'})
+    return pd.DataFrame(rows).set_index(['Baseline', 'Model']), pd.DataFrame(numbers)
 
 
 def t2_models(results, weights_dir):

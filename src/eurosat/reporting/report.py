@@ -2,7 +2,7 @@
 
 <run>/report/
   F1_augmented_views.png/.pdf ... F11_baseline_effects.png/.pdf
-  T1_main_results.csv ... T4_labels_used.csv (each + _numbers.csv)
+  T1_main_results.csv ... T5_many_label_check.csv (each + _numbers.csv)
   report.json   which items were made, where, and why any were skipped
 """
 from dataclasses import dataclass, field
@@ -16,7 +16,8 @@ from . import tables as T
 
 # (id, title, placement in the report) in the order of figure_n_table_sug.md.
 ITEMS = [('F1', 'Augmented support views', 'supplementary'), ('T2', 'Models and fine-tuning', 'supplementary'),
-         ('T4', 'Labels used', 'supplementary'), ('T1', 'Main results', 'main'), ('F2', 'Few-shot curves', 'main'),
+         ('T4', 'Labels used', 'supplementary'), ('T1', 'Main results', 'main'), ('T5', 'Many-label check', 'main'),
+         ('F2', 'Few-shot curves', 'main'),
          ('F3', 'Paired model differences', 'main'), ('F4', 'Per-class recall', 'supplementary'),
          ('F5', 'Confusion matrices', 'supplementary'), ('F11', 'Baseline effects', 'main'),
          ('F6', 'Augmentation gains', 'main'), ('F7', 'All-augmentation gain by shot', 'supplementary'),
@@ -54,8 +55,10 @@ def build_report(results, prepared=None, config=None, output=None):
         'F10': lambda: F.f10_class_effects(results, output), 'F11': lambda: F.f11_baseline_effects(results, output),
         'T1': lambda: T.t1_main_results(results), 'T2': lambda: T.t2_models(results, weights_dir),
         'T3': lambda: T.t3_preferred_augmentation(results), 'T4': lambda: T.t4_labels_used(results, weights_dir),
+        'T5': lambda: T.t5_many_label_check(results),
     }
-    names = {'T1': 'T1_main_results', 'T2': 'T2_models', 'T3': 'T3_preferred_augmentation', 'T4': 'T4_labels_used'}
+    names = {'T1': 'T1_main_results', 'T2': 'T2_models', 'T3': 'T3_preferred_augmentation', 'T4': 'T4_labels_used',
+             'T5': 'T5_many_label_check'}
     for item, _, _ in ITEMS:
         try:
             made = makers[item]()

@@ -100,7 +100,7 @@ SECTIONS = [
     ('4 · Fine-tune', 'Trains the fine-tuned baseline. Models already trained are skipped.', 'run.fine_tune()'),
     ('5 · Run', 'Embeddings and classifiers for every baseline × model × condition, then the report figures and '
                 'tables. Saved work is reused, so a stopped run resumes.', 'run.run()'),
-    ('6 · Results: models and baselines', 'T1, F2, F3, F11 (figure_n_table_sug.md).', 'run.show_models()'),
+    ('6 · Results: models and baselines', 'T1, T5, F2, F3, F11 (figure_n_table_sug.md).', 'run.show_models()'),
     ('7 · Results: augmentation', 'F6, F8, T3.', 'run.show_augmentation()'),
     ('8 · Checks and files', 'Classifier checks, labels used (T4) and where the outputs are saved.', 'run.show_checks()'),
 ]

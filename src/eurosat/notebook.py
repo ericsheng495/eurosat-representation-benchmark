@@ -180,8 +180,8 @@ class Run:
             print(f'Also saved: {", ".join(supplementary)} (shown with SHOW_DETAILS = True).')
 
     def show_models(self):
-        """Section 6: T1, F2, F3, F11 (+ F4, F5, T2)."""
-        self._show(['T1', 'F2', 'F3', 'F11'], ['F4', 'F5', 'T2'])
+        """Section 6: T1, T5, F2, F3, F11 (+ F4, F5, T2)."""
+        self._show(['T1', 'T5', 'F2', 'F3', 'F11'], ['F4', 'F5', 'T2'])
 
     def show_augmentation(self):
         """Section 7: F6, F8, T3 (+ F1, F7, F9, F10)."""

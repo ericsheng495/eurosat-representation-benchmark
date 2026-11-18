@@ -3,7 +3,7 @@
   style     shared fonts, colors and drawing helpers
   figures   F1-F11
   tables    T1-T3
-  report    builds all 15 items and saves them next to the results
+  report    builds all 16 items and saves them next to the results
 """
 from .style import STYLE, save_figure
 
