@@ -1,6 +1,8 @@
 # Figure and Table Plan
 
-The 14 figures and tables for the final report. The experiment design is in [research_info.md](research_info.md).
+The 15 figures and tables for the final report. The experiment design is in [research_info.md](research_info.md).
+
+All 15 are built from a run's results by `src/eurosat/reporting/` (notebook Sections 6–8) and saved to `<storage>/outputs/<run>/report/`: figures as PNG and PDF, tables as CSV. An item the run cannot support (for example F3 without a model pair) is skipped with the reason. Example layouts: [docs/figure_examples.pdf](docs/figure_examples.pdf).
 
 For each item:
 - **What:** the kind of figure or table.
@@ -13,7 +15,8 @@ For each item:
 | ID | Title | Kind | Report section | Placement | Data from |
 |---|---|---|---|---|---|
 | F1 | Augmented support views | Image grid | Methods | Supp. | No run needed |
-| T2 | Models and fine-tuning | Table | Methods | Supp. | Fine-tuning |
+| T2 | Models and fine-tuning | Table | Methods | Supp. | Fine-tuning + main run |
+| T4 | Labels used | Table | Methods | Supp. | Main run |
 | T1 | Main results | Table | Results: models | **Main** | Main run |
 | F2 | Few-shot curves | Line chart | Results: models | **Main** | Main run |
 | F3 | Paired model differences | Forest plot | Results: models | **Main** | Main run |
@@ -27,7 +30,7 @@ For each item:
 | F9 | Number of views | Line chart | Results: augmentation | Supp. | View-sweep run |
 | F10 | Class-level augmentation effects | Heatmap | Results: augmentation | Supp. | Main run |
 
-Main text: T1, F2, F3, F11, F6, F8, T3. The other seven are supplementary.
+Main text: T1, F2, F3, F11, F6, F8, T3. The other eight are supplementary.
 
 ## Conventions
 
@@ -49,15 +52,22 @@ Main text: T1, F2, F3, F11, F6, F8, T3. The other seven are supplementary.
 
 ### T2 · Models and fine-tuning
 - **What:** a table, one row per model.
-- **Contains:** type, pretraining data, parameters, embedding size, extraction speed. For fine-tuning: the chosen learning rate, 6-class val and test accuracy, and training time.
+- **Contains:** type, pretraining data, parameters, embedding size. Compute cost of the pretrained backbone: embedding speed (images per second, loading and augmentation included), total classifier fitting time, and peak GPU memory. For fine-tuning: the chosen learning rate, 6-class val and test accuracy, and training time.
 - **Why:** to give the context for reading model differences (size and cost), and to check that fine-tuning worked.
 - **Where:** Methods, models and baselines. Supplementary.
+- **Note:** times are wall-clock on one computer (RTX 5060 Ti, 8-core CPU). Classifier fits run in parallel on all CPU cores.
+
+### T4 · Labels used
+- **What:** a table, one row per shot budget, plus all shots and fine-tuning.
+- **Contains:** labeled images by role. Train: the support images that fit each test classifier (the shot budget). Choose settings: the distinct development images that choose C and the preferred augmentation. Score only: the distinct test query images. The fine-tuning row lists its train, val and test images.
+- **Why:** the proposal promises to report development labels separately from the shot budget. A 1-shot result uses 4 labels to train, but more labels to choose its settings.
+- **Where:** Methods, evaluation protocol. Supplementary. Notebook Section 8.
 
 ## Results: models (track 1)
 
 ### T1 · Main results
 - **What:** a table, one row per model and baseline (12 rows).
-- **Contains:** accuracy at 1, 5 and 10 shots, as mean [95% CI], with Macro-F1 below. No augmentation. Chance is 25%.
+- **Contains:** accuracy at 1, 5 and 10 shots, as mean [95% CI], with Macro-F1 in the next column. No augmentation. Chance is 25%.
 - **Why:** the headline numbers. It shows which model and baseline is best at each shot.
 - **Where:** Results, first table. Main.
 - **Note:** a high mean can hide a weak class. See F4.

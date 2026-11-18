@@ -1,6 +1,5 @@
 """Small, inspectable tables and figures for notebook data-processing stages."""
 from collections import Counter
-from pathlib import Path
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -8,7 +7,7 @@ from PIL import Image
 from torch.utils.data import DataLoader
 
 from ..config import CLASSES, NOVEL_CLASSES
-from ..reporting import STYLE, save_figure
+from ..reporting.style import STYLE, save_figure
 from .images import Images
 
 

@@ -2,7 +2,7 @@
 
 Research plan for the EuroSAT few-shot benchmark. Where it differs from the [original proposal](docs/project-proposal.pdf), this file is the current version (see section 6).
 
-**Status (2026-11-16):** the plan is agreed. The code and notebook still follow the previous plan. They are updated in step 2 (section 5).
+**Status (2026-11-18):** the code follows the plan. The GPU smoke run passed end to end, and the issues it found are fixed (section 5). Next: fine-tune the four models (step 5).
 
 ## 1. Summary
 
@@ -74,7 +74,7 @@ EuroSAT RGB: 27,000 Sentinel-2 tiles, 64×64 px, 10 classes. The split comes fro
 | ResNet-18 | Standard CNN | ImageNet-1K, supervised | 512 | 11.2M |
 | ConvNeXt-Tiny | Modern CNN | ImageNet-1K, supervised | 768 | 27.8M |
 | ViT-B/16 | Transformer | ImageNet-1K, supervised | 768 | 85.8M |
-| DINO ViT-S/16 | Transformer | ImageNet-1K, self-supervised (no labels) | 384 | about 21M |
+| DINO ViT-S/16 | Transformer | ImageNet-1K, self-supervised (no labels) | 384 | 21.7M |
 
 - CNN embeddings are the pooled features before the classification head. Transformer embeddings are the final normalized class token.
 - DINO ViT-S/16 replaces DINOv2, which was pretrained on a much larger dataset. All four models now share the same pretraining data.
@@ -92,8 +92,11 @@ Each baseline is its own model instance. No model is shared between baselines, a
 Fine-tuning recipe, the same for every model:
 - Start from a fresh copy of the pretrained weights.
 - Train the whole backbone plus a new 6-class head on the 10,200 train images, in the same order for every model.
-- AdamW, cosine schedule, 10 epochs, batch 64, no augmentation.
-- Try learning rates 1e-5, 3e-5 and 1e-4. Keep the run and epoch with the best accuracy on the 3,400 val images.
+- The new head starts at zero, so every model starts at the same loss. DINO's embeddings are about 5× longer than the others'. A random head would give it much larger first gradients.
+- AdamW with weight decay 0.05 (none on biases, normalization weights, position embeddings and class tokens). 10 epochs, batch 64, mixed precision, no augmentation.
+- No dropout or stochastic depth in any model. ConvNeXt's default stochastic depth (0.1) is turned off, because the other three models have none.
+- The learning rate changes once per epoch: epoch 1 runs at 0.1× (warmup), then it follows a cosine curve down over epochs 2–10.
+- Try 10 learning rates: 1e-6, 2e-6, 5e-6, 1e-5, 2e-5, 5e-5, 1e-4, 2e-4, 5e-4, 1e-3. Keep the run and epoch with the best accuracy on the 3,400 val images.
 - Report accuracy on the 3,400 test images as a check. Then drop the 6-class head and freeze the backbone.
 
 ### 4.4 Few-shot classifier
@@ -103,6 +106,7 @@ Fine-tuning recipe, the same for every model:
 - C is chosen from {0.01, 0.1, 1, 10, 100, 1000} by mean accuracy on the development episodes. It is chosen separately for each baseline, model, augmentation condition and shot. Ties go to the smaller C. A pick at 0.01 or 1000 is flagged.
 - The chosen C is then fixed. A new classifier is fitted on each test episode's supports and scored on its queries.
 - Test labels never choose any setting.
+- Development labels choose C and the preferred augmentation. Their number is reported apart from the shot budget (T4).
 
 ### 4.5 Tracks
 
@@ -128,7 +132,7 @@ Rules:
 |---|---|---|
 | flip | Mirror | left-right or top-bottom |
 | rotation | Quarter turn | 90°, 180° or 270° |
-| scale up | Zoom in on the center | ×1.1–1.3 |
+| scale up | Zoom in on the center (continuous, so views never repeat) | ×1.1–1.3 |
 | brightness/contrast | Change both | each ×0.7–0.9 or ×1.1–1.3 |
 | noise | Gaussian pixel noise | std 0.05 |
 | blur | Gaussian blur | σ 2.5–3.5 px |
@@ -146,7 +150,8 @@ Rules:
 - Paired differences in percentage points on the same episodes: model vs model, baseline vs baseline, augmentation vs none.
 - 95% bootstrap confidence intervals over episodes.
 - The share of episodes where an augmentation gives no gain.
-- Model size and compute cost.
+- Model size and compute cost: embedding speed, classifier fitting time, peak GPU memory (T2).
+- Labels used by role: the shot budget, development labels and test labels (T4).
 
 Two rules for reading results:
 - Comparisons across shot budgets use means only, because each shot budget has its own episodes.
@@ -156,11 +161,11 @@ Two rules for reading results:
 
 | Step | What | Status |
 |---|---|---|
-| 1 | Agree the plan: this file and the figure plan | Figure plan is next |
-| 2 | Update the code: three baselines per model, fine-tuning, the new augmentation set, the wider C search, tidy folders, a simple notebook | To do |
-| 3 | Install GPU PyTorch on the local computer | To do |
-| 4 | Smoke run: every stage end to end on a few episodes | To do |
-| 5 | Fine-tune the four models (three learning rates each) | To do |
+| 1 | Agree the plan: this file and the figure plan | Done; items 1 and 4 of section 9 still open |
+| 2 | Update the code: three baselines per model, fine-tuning, the new augmentation set, the wider C search, tidy folders, a simple notebook, the 15 report figures and tables | Done |
+| 3 | Install GPU PyTorch on the local computer | Done: conda env `eurosat`, PyTorch 2.15 with CUDA 13.2 |
+| 4 | Smoke run: every stage end to end on a few episodes | Done. Fixes after it: the fine-tuning head starts at zero, label use added (T4), classifier cost added (T2) |
+| 5 | Fine-tune the four models (ten learning rates each) | To do |
 | 6 | Main run: tracks 1–3 on all 12 backbones | To do |
 | 7 | View-sweep run | To do |
 | 8 | Figures, tables and write-up | To do |
@@ -182,10 +187,12 @@ Two rules for reading results:
 
 - The models differ in size (11M to 86M parameters). ViT-B/16 trained on ImageNet-1K alone is a weak ViT.
 - The untrained baseline is one random draw per model.
+- The untrained ConvNeXt is close to a shallow network. torchvision scales each block's output by 1e-6 at the start, so its blocks do almost nothing before training.
 - Fine-tuning uses different classes from the evaluated ones. It measures adaptation to satellite images, not knowledge of the test classes.
 - Images recur across episodes, and the split is by image, not by location. Confidence intervals describe this episode set, not new regions.
 - Only four classes are evaluated, and three of them are vegetation.
 - The 64 px tiles are upsampled to 224 px.
+- Blur changes smooth tiles very little: in a check of 40 development supports, 12 blurred views (mostly Pasture) were nearly identical to their originals. A stronger blur would erase class cues such as orchard texture, so the setting stays.
 - Many conditions are compared. We select on development data and report every condition, including negative results.
 
 ## 8. Where things live
@@ -203,7 +210,7 @@ Two rules for reading results:
 | # | Item | Why it matters | Status |
 |---|---|---|---|
 | 1 | Team agreement to replace DINOv2 with DINO ViT-S/16 | It changes a model named in the proposal | Open |
-| 2 | ResNet-18 code | The team has existing code to use. It is attached at step 2 | Waiting |
-| 3 | DINO ViT-S/16 checkpoint | Pin the exact version and verify the embedding point, as done for the other models | Step 2 |
-| 4 | Main-text figures and tables | Page limit; 14 items are planned | Open |
-| 5 | Development-label reporting | The proposal promises it; the log currently records 0 | Step 2 |
+| 2 | Teammates' ResNet-18 / ConvNeXt training code | Used as a reference. Decided: keep "Untrained" (no training) instead of training from scratch, and use one shared fine-tuning recipe with the teammates' stabilizers (weight decay, warmup, mixed precision) for all models | Decided |
+| 3 | DINO ViT-S/16 checkpoint | Pin the exact version and verify the embedding point, as done for the other models | Done: pinned to commit 7c446df; embedding verified |
+| 4 | Main-text figures and tables | Page limit; 15 items are planned | Open |
+| 5 | Development-label reporting | The proposal promises it | Done: T4 lists labels by role |

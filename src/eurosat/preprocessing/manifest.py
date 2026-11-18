@@ -1,12 +1,10 @@
 """Validate the complete split contract, then select fixed episodes for execution."""
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 import json
 from pathlib import Path
-import numpy as np
 
 from ..cache import digest_file, key, write_json
 from ..config import BASE_CLASSES, CLASSES, NOVEL_CLASSES
-from ..evaluation import fit_classifier
 from .data import load_source
 
 
@@ -141,10 +139,10 @@ def select_episodes(source, validated, config, storage):
                             for role in ['support', 'query'] for i in ep[role]}) for phase in ['dev', 'test']}
     provenance = {'sha256': validated.sha256, 'dev_episodes': len(next(iter(episodes['dev'].values()))),
                   'test_episodes': config.trials, 'query_per_class': saved['meta']['n_query'],
-                  'selection': 'C chosen on development episodes only; fixed augmentation strengths'}
+                  'selection': 'C chosen on development episodes only; augmentation settings fixed before runs'}
     dataset_id = key({'source_dataset': source.source_id, 'manifest': validated.sha256, 'records': records})
-    selection_id = key({'mode': config.mode, 'seed': config.seed, 'shots': config.shots, 'trials': config.trials})
-    audit_dir = Path(storage) / 'cache/data-audits' / validated.sha256 / selection_id
+    selected = selection_id(config)
+    audit_dir = Path(storage) / 'cache/data-audits' / validated.sha256 / selected
     audit_dir.mkdir(parents=True, exist_ok=True)
     write_json(audit_dir / 'audit.json', {'archive_sha256': source.archive_sha256,
                'manifest_sha256': validated.sha256, 'source_integrity': source.integrity,
@@ -155,36 +153,15 @@ def select_episodes(source, validated, config, storage):
     write_json(audit_dir / 'selected-episodes.json', episodes)
 
     return EpisodeData(source.root, records, split, dataset_id, trials, episodes,
-                       provenance, selection_id, audit_dir)
+                       provenance, selected, audit_dir)
+
+
+def selection_id(config):
+    """Identifies which episodes a run uses (smoke or full, how many, which shots)."""
+    return key({'mode': config.mode, 'seed': config.seed, 'shots': config.shots, 'trials': config.trials})
 
 
 def prepare_manifest_data(storage, scratch, config, path):
-    source = load_source(storage, scratch, config.seed)
+    source = load_source(storage, scratch)
     validated = validate_manifest(path, source)
     return select_episodes(source, validated, config, storage)
-
-
-def select_episode_classifier(original, augmented, aug_map, labels, episodes, shots, policy, config):
-    """Choose C on development episodes; ties keep the smaller C."""
-    best = None
-    for c in sorted(config.classifier_cs):
-        accuracies = []
-        for episode in episodes['dev'][str(shots)]:
-            x, y = episode_support(original, augmented, aug_map, labels, episode['support'], policy, config)
-            _, _, accuracy = fit_classifier(x, y, original[episode['query']], labels[episode['query']],
-                                             replace(config, classifier_cs=[c]))
-            accuracies.append(accuracy)
-        candidate = (float(np.mean(accuracies)), c)
-        if best is None or candidate[0] > best[0]:
-            best = candidate
-    return best[1], best[0]
-
-
-def episode_support(original, augmented, aug_map, labels, indices, policy, config):
-    x, y = original[indices], labels[indices]
-    if policy == 'repeat':
-        return np.tile(x, (config.views + 1, 1)), np.tile(y, config.views + 1)
-    if augmented is not None:
-        additional = [aug_map[i, view] for i in indices for view in range(config.views)]
-        return np.concatenate([x, augmented[additional]]), np.concatenate([y, np.repeat(y, config.views)])
-    return x, y
