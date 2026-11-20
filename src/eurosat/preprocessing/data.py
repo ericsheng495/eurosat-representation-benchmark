@@ -107,7 +107,7 @@ def load_source(storage, scratch):
         write_json(audit_path, audit)
 
     records = audit['records']
-    inventory = [{'class': name, 'role': 'base (reserved)' if name in BASE_CLASSES else 'novel (evaluated)',
+    inventory = [{'class': name, 'role': 'base (fine-tuning)' if name in BASE_CLASSES else 'novel (evaluated)',
                   'archive_images': sum(Path(info.filename).parent.name == name for info in images),
                   'unique_images': sum(row['label'] == label for row in records)}
                  for label, name in enumerate(CLASSES)]

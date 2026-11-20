@@ -72,8 +72,8 @@ The 16 figures and tables for the final report. The experiment itself is describ
   - the share of variance in the top 5 directions. A six-class head needs exactly five.
 - **Purpose:** T1 shows fine-tuned well below pretrained. T5 shows whether fine-tuning lost the information or only made it hard to find.
 - **Read it:** read the accuracy and the dimensions together.
-  - In the first run, fine-tuned embeddings used about 5 directions, against 20–36 for pretrained. Yet with many labels, fine-tuned was about as accurate as pretrained. The information is still there, but 1–10 labels cannot find it.
-  - Untrained embeddings also used very few directions, but stayed weak with many labels. Their information is missing.
+  - Fine-tuned embeddings use about 5 directions, against 20–36 for pretrained. Yet with many labels, fine-tuned is about as accurate as pretrained. The information is still there, but 1–10 labels cannot find it.
+  - Untrained embeddings also use very few directions, but stay weak with many labels. Their information is missing.
   - A separate check confirmed that the fine-tuned weights load correctly.
 
 ### F2 · Few-shot curves

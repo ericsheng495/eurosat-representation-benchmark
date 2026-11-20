@@ -45,7 +45,7 @@ The terminal run does not make the report. Run the notebook afterwards: it reuse
 ## Run it on Colab
 
 1. Choose a GPU runtime and set `TARGET = 'colab_gpu'` in Section 1.
-2. Storage goes to Google Drive, by default `MyDrive/ColabNotebooks/cs7643/EuroSATRepresentationBenchmark`. To use another folder, such as a shared one, set `STORAGE_DIR`.
+2. Storage goes to Google Drive, by default `MyDrive/ColabNotebooks/cs7643/EuroSATRepresentationBenchmark`. If an older `EuroSATLowData` folder exists there, it is used instead. To use another folder, such as a shared one, set `STORAGE_DIR`.
 3. The notebook needs the code: set `CODE_DIR` to a checkout of this repository, or copy `src/` to `<storage>/code/src/`.
 4. Copy `splits_manifest.json` into the storage folder, or set `MANIFEST_FILE`.
 

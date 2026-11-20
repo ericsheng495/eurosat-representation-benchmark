@@ -66,7 +66,7 @@ def validate_manifest(path, source):
 
             used.update(members)
             pools[cls, name] = members
-            rows.append({'class': cls, 'role': 'base (reserved)' if cls in BASE_CLASSES else 'novel',
+            rows.append({'class': cls, 'role': 'base (fine-tuning)' if cls in BASE_CLASSES else 'novel',
                          'pool': name, 'images': len(members)})
 
         if used != set(inventory[cls]):

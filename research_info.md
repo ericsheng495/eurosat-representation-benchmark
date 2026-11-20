@@ -2,7 +2,7 @@
 
 The research plan for the EuroSAT few-shot benchmark. Where it differs from the [original proposal](docs/project-proposal.pdf), this file is the current version (section 6).
 
-**Status (2026-11-18):** fine-tuning is done. The full run is being repeated with a wider C range; the first run's results were deleted. Next: the full run (step 6).
+**Status (2026-11-20):** fine-tuning and the full run are done. All 16 figures and tables are made. Next: the write-up (step 7).
 
 ## 1. Summary
 
@@ -89,7 +89,7 @@ Each baseline builds its own model. No backbone ever trains on development or te
 Fine-tuning recipe, the same for every model. It uses the stabilizers from the teammates' training code.
 - Start from the pretrained weights. Train the whole backbone and a new 6-class head on the 10,200 train images. The data order is the same for every model.
 - The new head starts at zero, so every model starts at the same loss. A random head would give DINO, whose embeddings are about 5× longer, much larger first gradients.
-- AdamW with weight decay 0.05 (none on biases, normalization weights, position embeddings and class tokens). 10 epochs, batch 64, mixed precision.
+- AdamW with weight decay 0.05 (none on biases, normalization weights, layer scale, position embeddings and class tokens). 10 epochs, batch 64, mixed precision.
 - No augmentation, dropout or stochastic depth. ConvNeXt's default stochastic depth is turned off to match the other models.
 - Learning rate: 0.1× in epoch 1 (warmup), then a cosine decay over epochs 2–10.
 - Try 10 learning rates from 1e-6 to 1e-3. Keep the run and epoch with the best val accuracy. Test accuracy is a check only.
@@ -157,8 +157,8 @@ Two rules for reading results:
 | 3 | Install GPU PyTorch locally | Done: conda env `eurosat`, PyTorch 2.15, CUDA 13.2 |
 | 4 | Smoke run of every stage | Done |
 | 5 | Fine-tune the four models | Done in 2.8 hours. Chosen learning rates: ResNet 2e-5, ConvNeXt 1e-5, ViT and DINO 5e-6, none at the edge. 6-class val 99.7–99.8% |
-| 6 | Full run: tracks 1–3 and the view sweep on all 12 backbones | Rerun with the wider C range. The first run (1.6 hours) led to T5 and the new range |
-| 7 | Figures, tables and write-up | To do |
+| 6 | Full run: tracks 1–3 and the view sweep on all 12 backbones | Done (2026-11-20): 720 result groups. C was picked at an end of the range in 5 groups, all 1-shot. No fit hit the iteration limit. An earlier run with the old C range led to T5 and the wider range |
+| 7 | Write-up | To do |
 
 ## 6. Changes from the original proposal
 
