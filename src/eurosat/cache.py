@@ -49,7 +49,7 @@ def write_npz(path, **arrays):
 def prepare_storage(storage):
     import torch
     storage = Path(storage)
-    for name in ['data', 'cache/weights', 'cache/features', 'cache/experiments', 'outputs']:
+    for name in ['data', 'cache/weights', 'outputs']:
         (storage / name).mkdir(parents=True, exist_ok=True)
     torch.hub.set_dir(str(storage / 'cache/weights/torch'))
     return storage
